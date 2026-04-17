@@ -1,17 +1,61 @@
-import { Button, VerticalBox } from "std-widgets.slint";
+import { LoginPage } from "./pages/login-page.slint";
+import { RegisterPage } from "./pages/register-page.slint";
+import { MainLayout } from "./layouts/main-layout.slint";
 
 export component AppWindow inherits Window {
-    in-out property<int> counter: 42;
-    callback request-increase-value();
-    VerticalBox {
-        Text {
-            text: "Counter: \{root.counter}";
+    width: current_page == 2 ? 1200px : 420px;
+    height: current_page == 2 ? 760px : 420px;
+    title: "LifeAfterLife";
+
+    in-out property <int> current_page: 0;
+
+    in-out property <string> login_email_text: "";
+    in-out property <string> login_password_text: "";
+    in-out property <string> login_status_text: "Enter your credentials";
+
+    in-out property <string> register_email_text: "";
+    in-out property <string> register_password_text: "";
+    in-out property <string> register_status_text: "Create a new account";
+
+    callback login_clicked(string, string);
+    callback register_clicked(string, string);
+
+    if (current_page == 0) : LoginPage {
+        width: parent.width;
+        height: parent.height;
+
+        email_text <=> root.login_email_text;
+        password_text <=> root.login_password_text;
+        status_text <=> root.login_status_text;
+
+        login_clicked(email, password) => {
+            root.login_clicked(email, password);
         }
-        Button {
-            text: "Increase value";
-            clicked => {
-                root.request-increase-value();
-            }
+
+        open_register => {
+            root.current_page = 1;
         }
-     }
+    }
+
+    if (current_page == 1) : RegisterPage {
+        width: parent.width;
+        height: parent.height;
+
+        email_text <=> root.register_email_text;
+        password_text <=> root.register_password_text;
+        status_text <=> root.register_status_text;
+
+        register_clicked(email, password) => {
+            root.register_clicked(email, password);
+        }
+
+        open_login => {
+            root.current_page = 0;
+        }
+    }
+
+    if (current_page == 2) : MainLayout {
+        width: parent.width;
+        height: parent.height;
+    }
 }

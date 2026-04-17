@@ -1,0 +1,24 @@
+import { TreesRail } from "../components/trees-rail.slint";
+import { GraphCanvas } from "../components/graph-canvas.slint";
+import { InspectorPanel } from "../components/inspector-panel.slint";
+
+export component MainLayout inherits Rectangle {
+    background: #f4ede4;
+
+    HorizontalLayout {
+        padding: 20px;
+        spacing: 18px;
+
+        TreesRail {
+            preferred-width: 236px;
+        }
+
+        GraphCanvas {
+            horizontal-stretch: 1;
+        }
+
+        InspectorPanel {
+            preferred-width: 280px;
+        }
+    }
+}

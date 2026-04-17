@@ -1,0 +1,46 @@
+export component InspectorPanel inherits Rectangle {
+    background: #f9f4ee;
+    border-radius: 18px;
+    border-color: #e9decf;
+    border-width: 1px;
+
+    VerticalLayout {
+        padding: 20px;
+        spacing: 16px;
+
+        Text {
+            text: "Details";
+            font-size: 22px;
+            font-weight: 600;
+            color: #5b4738;
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            background: #fffaf5;
+            border-radius: 14px;
+            border-color: #ede1d3;
+            border-width: 1px;
+
+            VerticalLayout {
+                alignment: center;
+                padding: 20px;
+                spacing: 8px;
+
+                Text {
+                    text: "No selection yet";
+                    font-size: 18px;
+                    color: #6b5645;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: "Select a person to view details";
+                    color: #95806f;
+                    wrap: word-wrap;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+    }
+}

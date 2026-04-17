@@ -1,0 +1,52 @@
+export component GraphCanvas inherits Rectangle {
+    background: #fffaf5;
+    border-radius: 20px;
+    border-color: #eadfce;
+    border-width: 1px;
+
+    VerticalLayout {
+        padding: 28px;
+        spacing: 14px;
+
+        Text {
+            text: "Family Graph";
+            font-size: 26px;
+            font-weight: 600;
+            color: #5b4738;
+        }
+
+        Text {
+            text: "This workspace will show the family graph editor and relationships once tree data is connected.";
+            wrap: word-wrap;
+            color: #87715f;
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            background: #fcf6ef;
+            border-radius: 16px;
+            border-color: #eee2d3;
+            border-width: 1px;
+
+            VerticalLayout {
+                alignment: center;
+                padding: 24px;
+                spacing: 8px;
+
+                Text {
+                    text: "Graph workspace placeholder";
+                    font-size: 20px;
+                    color: #6b5645;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: "Nodes, edges, and canvas interactions will be added later.";
+                    color: #9a8574;
+                    wrap: word-wrap;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,60 @@
+import { PrimaryButton } from "./primary-button.slint";
+
+export component TreesRail inherits Rectangle {
+    background: #f7f1ea;
+    border-radius: 18px;
+    border-color: #e6dacc;
+    border-width: 1px;
+
+    VerticalLayout {
+        padding: 20px;
+        spacing: 16px;
+
+        Text {
+            text: "Trees";
+            font-size: 22px;
+            font-weight: 600;
+            color: #5b4738;
+        }
+
+        Text {
+            text: "Your family trees will appear here.";
+            wrap: word-wrap;
+            color: #8a7665;
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            background: #fffaf5;
+            border-radius: 14px;
+            border-color: #eadfce;
+            border-width: 1px;
+
+            VerticalLayout {
+                padding: 12px;
+                spacing: 10px;
+
+                for label in [
+                    "Personal Tree",
+                    "Maternal Branch",
+                    "Shared Research"
+                ] : Rectangle {
+                    height: 42px;
+                    background: #f3e7da;
+                    border-radius: 12px;
+
+                    Text {
+                        x: 12px;
+                        y: 12px;
+                        text: label;
+                        color: #6b5645;
+                    }
+                }
+            }
+        }
+
+        PrimaryButton {
+            text: "+ New Tree";
+        }
+    }
+}

@@ -1,0 +1,75 @@
+import { LineEdit, Button } from "std-widgets.slint";
+import { PrimaryButton } from "../components/primary-button.slint";
+
+export component RegisterPage inherits Rectangle {
+    in-out property <string> email_text: "";
+    in-out property <string> password_text: "";
+    in-out property <string> status_text: "Create a new account";
+
+    callback register_clicked(string, string);
+    callback open_login();
+
+    background: transparent;
+
+    VerticalLayout {
+        padding: 24px;
+        spacing: 16px;
+
+        Text {
+            text: "LifeAfterLife";
+            font-size: 28px;
+            horizontal-alignment: center;
+        }
+
+        Text {
+            text: "Create your account";
+            font-size: 16px;
+            horizontal-alignment: center;
+        }
+
+        Rectangle {
+            height: 1px;
+            background: #444444;
+        }
+
+        VerticalLayout {
+            spacing: 10px;
+
+            Text { text: "Email"; }
+
+            LineEdit {
+                text <=> root.email_text;
+                placeholder-text: "example@mail.com";
+            }
+
+            Text { text: "Password"; }
+
+            LineEdit {
+                text <=> root.password_text;
+                placeholder-text: "Create password";
+                input-type: password;
+            }
+        }
+
+        PrimaryButton {
+            text: "Register";
+            clicked => {
+                root.register_clicked(root.email_text, root.password_text);
+            }
+        }
+
+        Button {
+            text: "Back to login";
+            clicked => {
+                root.open_login();
+            }
+        }
+
+        Text {
+            text: root.status_text;
+            wrap: word-wrap;
+            color: #cccccc;
+            horizontal-alignment: center;
+        }
+    }
+}
