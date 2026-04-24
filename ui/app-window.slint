@@ -1,6 +1,7 @@
 import { LoginPage } from "./pages/login-page.slint";
 import { RegisterPage } from "./pages/register-page.slint";
 import { MainLayout } from "./layouts/main-layout.slint";
+import { PersonNode, RelationshipLine } from "./components/graph-canvas.slint";
 
 export component AppWindow inherits Window {
     width: current_page == 2 ? 1200px : 420px;
@@ -16,9 +17,63 @@ export component AppWindow inherits Window {
     in-out property <string> register_email_text: "";
     in-out property <string> register_password_text: "";
     in-out property <string> register_status_text: "Create a new account";
+    in-out property <[string]> tree_names: [];
+    in-out property <[int]> tree_ids: [];
+    in-out property <int> selected_tree_id: -1;
+    in-out property <string> selected_tree_name: "";
+    in-out property <[PersonNode]> persons: [];
+    in-out property <[RelationshipLine]> relationship_lines: [];
+    in-out property <int> selected_person_id: -1;
+    in-out property <int> selected_relationship_id: -1;
+    in-out property <string> selected_relationship_type: "";
+    in-out property <string> selected_relationship_from_name: "";
+    in-out property <string> selected_relationship_to_name: "";
+    in-out property <string> selected_relationship_summary: "";
+    in-out property <string> selected_person_first_name: "";
+    in-out property <string> selected_person_middle_name: "";
+    in-out property <string> selected_person_last_name: "";
+    in-out property <string> selected_person_full_name: "";
+    in-out property <string> selected_person_birth_date: "";
+    in-out property <string> selected_person_death_date: "";
+    in-out property <string> selected_person_dates_text: "";
+    in-out property <bool> inspector_edit_mode: false;
+    in-out property <string> inspector_draft_first_name: "";
+    in-out property <string> inspector_draft_middle_name: "";
+    in-out property <string> inspector_draft_last_name: "";
+    in-out property <string> inspector_draft_birth_date: "";
+    in-out property <string> inspector_draft_death_date: "";
+    in-out property <bool> is_edit_mode: false;
+    in-out property <bool> relationship_creation_active: false;
+    in-out property <bool> relationship_type_selection_visible: false;
+    in-out property <string> relationship_creation_helper_text: "";
+    in-out property <float> canvas_offset_x: 0;
+    in-out property <float> canvas_offset_y: 0;
+    in-out property <float> canvas_zoom: 1.0;
 
     callback login_clicked(string, string);
     callback register_clicked(string, string);
+    callback tree_selected(int);
+    callback person_selected(int);
+    callback relationship_selected(float, float);
+    callback person_moved(int, float, float);
+    callback add_person_requested();
+    callback relationship_creation_started();
+    callback relationship_creation_canceled();
+    callback relationship_type_selected(string);
+    callback inspector_edit_started();
+    callback inspector_edit_canceled();
+    callback inspector_edit_saved();
+    callback delete_person_requested();
+    callback delete_relationship_requested();
+    callback inspector_draft_first_name_edited(string);
+    callback inspector_draft_middle_name_edited(string);
+    callback inspector_draft_last_name_edited(string);
+    callback inspector_draft_birth_date_edited(string);
+    callback inspector_draft_death_date_edited(string);
+    callback toggle_edit_mode();
+    callback canvas_selection_cleared();
+    callback canvas_panned(float, float);
+    callback canvas_zoom_changed(float);
 
     if (current_page == 0) : LoginPage {
         width: parent.width;
@@ -57,5 +112,126 @@ export component AppWindow inherits Window {
     if (current_page == 2) : MainLayout {
         width: parent.width;
         height: parent.height;
+
+        tree_names: root.tree_names;
+        tree_ids: root.tree_ids;
+        selected_tree_id: root.selected_tree_id;
+        selected_tree_name: root.selected_tree_name;
+        persons: root.persons;
+        relationship_lines: root.relationship_lines;
+        selected_person_id: root.selected_person_id;
+        selected_relationship_id: root.selected_relationship_id;
+        selected_relationship_type: root.selected_relationship_type;
+        selected_relationship_from_name: root.selected_relationship_from_name;
+        selected_relationship_to_name: root.selected_relationship_to_name;
+        selected_relationship_summary: root.selected_relationship_summary;
+        selected_person_first_name: root.selected_person_first_name;
+        selected_person_middle_name: root.selected_person_middle_name;
+        selected_person_last_name: root.selected_person_last_name;
+        selected_person_full_name: root.selected_person_full_name;
+        selected_person_birth_date: root.selected_person_birth_date;
+        selected_person_death_date: root.selected_person_death_date;
+        selected_person_dates_text: root.selected_person_dates_text;
+        inspector_edit_mode: root.inspector_edit_mode;
+        is_edit_mode: root.is_edit_mode;
+        inspector_draft_first_name: root.inspector_draft_first_name;
+        inspector_draft_middle_name: root.inspector_draft_middle_name;
+        inspector_draft_last_name: root.inspector_draft_last_name;
+        inspector_draft_birth_date: root.inspector_draft_birth_date;
+        inspector_draft_death_date: root.inspector_draft_death_date;
+        relationship_creation_active: root.relationship_creation_active;
+        relationship_type_selection_visible: root.relationship_type_selection_visible;
+        relationship_creation_helper_text: root.relationship_creation_helper_text;
+        canvas_offset_x: root.canvas_offset_x;
+        canvas_offset_y: root.canvas_offset_y;
+        canvas_zoom: root.canvas_zoom;
+
+        tree_selected(index) => {
+            root.tree_selected(index);
+        }
+
+        person_selected(person_id) => {
+            root.person_selected(person_id);
+        }
+
+        relationship_selected(x, y) => {
+            root.relationship_selected(x, y);
+        }
+
+        person_moved(person_id, x, y) => {
+            root.person_moved(person_id, x, y);
+        }
+
+        add_person_requested => {
+            root.add_person_requested();
+        }
+
+        relationship_creation_started => {
+            root.relationship_creation_started();
+        }
+
+        relationship_creation_canceled => {
+            root.relationship_creation_canceled();
+        }
+
+        relationship_type_selected(value) => {
+            root.relationship_type_selected(value);
+        }
+
+        inspector_edit_started => {
+            root.inspector_edit_started();
+        }
+
+        inspector_edit_canceled => {
+            root.inspector_edit_canceled();
+        }
+
+        inspector_edit_saved => {
+            root.inspector_edit_saved();
+        }
+
+        delete_person_requested => {
+            root.delete_person_requested();
+        }
+
+        delete_relationship_requested => {
+            root.delete_relationship_requested();
+        }
+
+        inspector_draft_first_name_edited(value) => {
+            root.inspector_draft_first_name_edited(value);
+        }
+
+        inspector_draft_middle_name_edited(value) => {
+            root.inspector_draft_middle_name_edited(value);
+        }
+
+        inspector_draft_last_name_edited(value) => {
+            root.inspector_draft_last_name_edited(value);
+        }
+
+        inspector_draft_birth_date_edited(value) => {
+            root.inspector_draft_birth_date_edited(value);
+        }
+
+        inspector_draft_death_date_edited(value) => {
+            root.inspector_draft_death_date_edited(value);
+        }
+
+        toggle_edit_mode => {
+            root.toggle_edit_mode();
+        }
+
+        canvas_selection_cleared => {
+            root.canvas_selection_cleared();
+        }
+
+        canvas_panned(offset_x, offset_y) => {
+            root.canvas_panned(offset_x, offset_y);
+        }
+
+        canvas_zoom_changed(zoom) => {
+            root.canvas_zoom_changed(zoom);
+        }
     }
 }

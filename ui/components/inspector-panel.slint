@@ -1,4 +1,41 @@
+import { ScrollView } from "std-widgets.slint";
+
 export component InspectorPanel inherits Rectangle {
+    in property <int> selected_tree_id: -1;
+    in property <string> selected_tree_name: "";
+    in property <int> selected_person_id: -1;
+    in property <int> selected_relationship_id: -1;
+    in property <string> selected_relationship_type: "";
+    in property <string> selected_relationship_from_name: "";
+    in property <string> selected_relationship_to_name: "";
+    in property <string> selected_relationship_summary: "";
+    in property <string> selected_person_first_name: "";
+    in property <string> selected_person_middle_name: "";
+    in property <string> selected_person_last_name: "";
+    in property <string> selected_person_full_name: "";
+    in property <string> selected_person_birth_date: "";
+    in property <string> selected_person_death_date: "";
+    in property <string> selected_person_dates_text: "";
+    in property <bool> inspector_edit_mode: false;
+    in property <bool> is_edit_mode: false;
+    in property <string> inspector_draft_first_name: "";
+    in property <string> inspector_draft_middle_name: "";
+    in property <string> inspector_draft_last_name: "";
+    in property <string> inspector_draft_birth_date: "";
+    in property <string> inspector_draft_death_date: "";
+
+    callback inspector_edit_started();
+    callback inspector_edit_canceled();
+    callback inspector_edit_saved();
+    callback delete_person_requested();
+    callback delete_relationship_requested();
+    callback inspector_draft_first_name_edited(string);
+    callback inspector_draft_middle_name_edited(string);
+    callback inspector_draft_last_name_edited(string);
+    callback inspector_draft_birth_date_edited(string);
+    callback inspector_draft_death_date_edited(string);
+    private property <bool> confirm_person_delete: false;
+
     background: #f9f4ee;
     border-radius: 18px;
     border-color: #e9decf;
@@ -22,23 +59,662 @@ export component InspectorPanel inherits Rectangle {
             border-color: #ede1d3;
             border-width: 1px;
 
-            VerticalLayout {
-                alignment: center;
-                padding: 20px;
-                spacing: 8px;
+            ScrollView {
+                width: parent.width;
+                height: parent.height;
 
-                Text {
-                    text: "No selection yet";
-                    font-size: 18px;
-                    color: #6b5645;
-                    horizontal-alignment: center;
-                }
+                Rectangle {
+                    width: parent.width;
+                    height: content.preferred-height + 40px;
+                    background: transparent;
 
-                Text {
-                    text: "Select a person to view details";
-                    color: #95806f;
-                    wrap: word-wrap;
-                    horizontal-alignment: center;
+                    content := VerticalLayout {
+                        width: parent.width;
+                        padding: 20px;
+                        spacing: 14px;
+
+                        Text {
+                            text: root.selected_relationship_id >= 0
+                                ? "Relationship"
+                                : root.selected_person_id >= 0
+                                    ? root.selected_person_full_name
+                                    : "Select a person";
+                            font-size: 18px;
+                            color: #6b5645;
+                            wrap: word-wrap;
+                            horizontal-alignment: center;
+                        }
+
+                        if (root.selected_relationship_id >= 0) : VerticalLayout {
+                            spacing: 12px;
+
+                            Rectangle {
+                                background: #f7efe6;
+                                border-radius: 12px;
+                                border-color: #e2d4c3;
+                                border-width: 1px;
+
+                                VerticalLayout {
+                                    padding: 14px;
+                                    spacing: 6px;
+
+                                    Text {
+                                        text: "Relationship";
+                                        color: #6b5645;
+                                    }
+
+                                    Text {
+                                        text: root.selected_relationship_summary;
+                                        color: #4f3b2e;
+                                        wrap: word-wrap;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                background: #f7efe6;
+                                border-radius: 12px;
+                                border-color: #e2d4c3;
+                                border-width: 1px;
+
+                                VerticalLayout {
+                                    padding: 14px;
+                                    spacing: 6px;
+
+                                    Text {
+                                        text: "Type";
+                                        color: #6b5645;
+                                    }
+
+                                    Text {
+                                        text: root.selected_relationship_type;
+                                        color: #4f3b2e;
+                                        wrap: word-wrap;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                background: #f8f1e8;
+                                border-radius: 12px;
+                                border-color: #e2d4c3;
+                                border-width: 1px;
+
+                                VerticalLayout {
+                                    padding: 14px;
+                                    spacing: 6px;
+
+                                    Text {
+                                        text: "Details";
+                                        color: #6b5645;
+                                        font-weight: 600;
+                                    }
+
+                                    Text {
+                                        text: "Relationship editing is not available yet.";
+                                        color: #95806f;
+                                        wrap: word-wrap;
+                                    }
+                                }
+                            }
+
+                            if (root.is_edit_mode) : TouchArea {
+                                height: 38px;
+
+                                Rectangle {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    background: #f1e0d2;
+                                    border-radius: 12px;
+                                    border-color: #c79f77;
+                                    border-width: 1px;
+
+                                    Text {
+                                        text: "Delete relationship";
+                                        color: #6b5645;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                clicked => {
+                                    root.delete_relationship_requested();
+                                }
+                            }
+                        }
+
+                        if (root.selected_relationship_id < 0 && root.selected_person_id >= 0) : VerticalLayout {
+                            spacing: 12px;
+
+                            if (!root.inspector_edit_mode) : VerticalLayout {
+                                spacing: 12px;
+
+                                Rectangle {
+                                    background: #f7efe6;
+                                    border-radius: 12px;
+                                    border-color: #e2d4c3;
+                                    border-width: 1px;
+
+                                    VerticalLayout {
+                                        padding: 14px;
+                                        spacing: 6px;
+
+                                        Text {
+                                            text: "First name";
+                                            color: #6b5645;
+                                        }
+
+                                        Text {
+                                            text: root.selected_person_first_name == "" ? "Not set" : root.selected_person_first_name;
+                                            color: #4f3b2e;
+                                            wrap: word-wrap;
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    background: #f7efe6;
+                                    border-radius: 12px;
+                                    border-color: #e2d4c3;
+                                    border-width: 1px;
+
+                                    VerticalLayout {
+                                        padding: 14px;
+                                        spacing: 6px;
+
+                                        Text {
+                                            text: "Middle name";
+                                            color: #6b5645;
+                                        }
+
+                                        Text {
+                                            text: root.selected_person_middle_name == "" ? "Not set" : root.selected_person_middle_name;
+                                            color: #4f3b2e;
+                                            wrap: word-wrap;
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    background: #f7efe6;
+                                    border-radius: 12px;
+                                    border-color: #e2d4c3;
+                                    border-width: 1px;
+
+                                    VerticalLayout {
+                                        padding: 14px;
+                                        spacing: 6px;
+
+                                        Text {
+                                            text: "Last name";
+                                            color: #6b5645;
+                                        }
+
+                                        Text {
+                                            text: root.selected_person_last_name == "" ? "Not set" : root.selected_person_last_name;
+                                            color: #4f3b2e;
+                                            wrap: word-wrap;
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    background: #f7efe6;
+                                    border-radius: 12px;
+                                    border-color: #e2d4c3;
+                                    border-width: 1px;
+
+                                    VerticalLayout {
+                                        padding: 14px;
+                                        spacing: 6px;
+
+                                        Text {
+                                            text: "Dates";
+                                            color: #6b5645;
+                                        }
+
+                                        Text {
+                                            text: root.selected_person_dates_text == "" ? "No dates available" : root.selected_person_dates_text;
+                                            color: #4f3b2e;
+                                            wrap: word-wrap;
+                                        }
+                                    }
+                                }
+
+                                TouchArea {
+                                    height: 38px;
+
+                                    Rectangle {
+                                        width: parent.width;
+                                        height: parent.height;
+                                        background: #f7efe6;
+                                        border-radius: 12px;
+                                        border-color: #decfbd;
+                                        border-width: 1px;
+
+                                        Text {
+                                            text: "Edit";
+                                            color: #6b5645;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    clicked => {
+                                        root.confirm_person_delete = false;
+                                        root.inspector_edit_started();
+                                    }
+                                }
+                            }
+
+                            if (root.inspector_edit_mode) : VerticalLayout {
+                                spacing: 12px;
+
+                                Text {
+                                    text: "Editing person";
+                                    color: #95806f;
+                                    horizontal-alignment: center;
+                                }
+
+                                Text {
+                                    text: "First name";
+                                    color: #6b5645;
+                                }
+
+                                Rectangle {
+                                    height: 48px;
+                                    background: #fffdf9;
+                                    border-radius: 12px;
+                                    border-color: name_input.has-focus ? #c79f77 : #d8c7b5;
+                                    border-width: 1px;
+                                    clip: true;
+
+                                    name_input := TextInput {
+                                        x: 12px;
+                                        y: 10px;
+                                        width: parent.width - 24px;
+                                        height: parent.height - 20px;
+                                        text: root.inspector_draft_first_name;
+                                        color: #4f3b2e;
+                                        selection-background-color: #ead8c5;
+                                        selection-foreground-color: #4f3b2e;
+                                        single-line: true;
+                                        vertical-alignment: center;
+                                        edited => {
+                                            root.inspector_draft_first_name_edited(self.text);
+                                        }
+                                    }
+
+                                    if (root.inspector_draft_first_name == "" && !name_input.has-focus) : Text {
+                                        x: 12px;
+                                        y: 0px;
+                                        width: parent.width - 24px;
+                                        height: parent.height;
+                                        text: "First name";
+                                        color: #b69f8b;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                Text {
+                                    text: "Middle name";
+                                    color: #6b5645;
+                                }
+
+                                Rectangle {
+                                    height: 48px;
+                                    background: #fffdf9;
+                                    border-radius: 12px;
+                                    border-color: middle_input.has-focus ? #c79f77 : #d8c7b5;
+                                    border-width: 1px;
+                                    clip: true;
+
+                                    middle_input := TextInput {
+                                        x: 12px;
+                                        y: 10px;
+                                        width: parent.width - 24px;
+                                        height: parent.height - 20px;
+                                        text: root.inspector_draft_middle_name;
+                                        color: #4f3b2e;
+                                        selection-background-color: #ead8c5;
+                                        selection-foreground-color: #4f3b2e;
+                                        single-line: true;
+                                        vertical-alignment: center;
+                                        edited => {
+                                            root.inspector_draft_middle_name_edited(self.text);
+                                        }
+                                    }
+
+                                    if (root.inspector_draft_middle_name == "" && !middle_input.has-focus) : Text {
+                                        x: 12px;
+                                        y: 0px;
+                                        width: parent.width - 24px;
+                                        height: parent.height;
+                                        text: "Optional";
+                                        color: #b69f8b;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                Text {
+                                    text: "Last name";
+                                    color: #6b5645;
+                                }
+
+                                Rectangle {
+                                    height: 48px;
+                                    background: #fffdf9;
+                                    border-radius: 12px;
+                                    border-color: last_input.has-focus ? #c79f77 : #d8c7b5;
+                                    border-width: 1px;
+                                    clip: true;
+
+                                    last_input := TextInput {
+                                        x: 12px;
+                                        y: 10px;
+                                        width: parent.width - 24px;
+                                        height: parent.height - 20px;
+                                        text: root.inspector_draft_last_name;
+                                        color: #4f3b2e;
+                                        selection-background-color: #ead8c5;
+                                        selection-foreground-color: #4f3b2e;
+                                        single-line: true;
+                                        vertical-alignment: center;
+                                        edited => {
+                                            root.inspector_draft_last_name_edited(self.text);
+                                        }
+                                    }
+
+                                    if (root.inspector_draft_last_name == "" && !last_input.has-focus) : Text {
+                                        x: 12px;
+                                        y: 0px;
+                                        width: parent.width - 24px;
+                                        height: parent.height;
+                                        text: "Optional";
+                                        color: #b69f8b;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                Text {
+                                    text: "Birth date";
+                                    color: #6b5645;
+                                }
+
+                                Rectangle {
+                                    height: 48px;
+                                    background: #fffdf9;
+                                    border-radius: 12px;
+                                    border-color: birth_input.has-focus ? #c79f77 : #d8c7b5;
+                                    border-width: 1px;
+                                    clip: true;
+
+                                    birth_input := TextInput {
+                                        x: 12px;
+                                        y: 10px;
+                                        width: parent.width - 24px;
+                                        height: parent.height - 20px;
+                                        text: root.inspector_draft_birth_date;
+                                        color: #4f3b2e;
+                                        selection-background-color: #ead8c5;
+                                        selection-foreground-color: #4f3b2e;
+                                        single-line: true;
+                                        vertical-alignment: center;
+                                        edited => {
+                                            root.inspector_draft_birth_date_edited(self.text);
+                                        }
+                                    }
+
+                                    if (root.inspector_draft_birth_date == "" && !birth_input.has-focus) : Text {
+                                        x: 12px;
+                                        y: 0px;
+                                        width: parent.width - 24px;
+                                        height: parent.height;
+                                        text: "Optional";
+                                        color: #b69f8b;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                Text {
+                                    text: "Death date";
+                                    color: #6b5645;
+                                }
+
+                                Rectangle {
+                                    height: 48px;
+                                    background: #fffdf9;
+                                    border-radius: 12px;
+                                    border-color: death_input.has-focus ? #c79f77 : #d8c7b5;
+                                    border-width: 1px;
+                                    clip: true;
+
+                                    death_input := TextInput {
+                                        x: 12px;
+                                        y: 10px;
+                                        width: parent.width - 24px;
+                                        height: parent.height - 20px;
+                                        text: root.inspector_draft_death_date;
+                                        color: #4f3b2e;
+                                        selection-background-color: #ead8c5;
+                                        selection-foreground-color: #4f3b2e;
+                                        single-line: true;
+                                        vertical-alignment: center;
+                                        edited => {
+                                            root.inspector_draft_death_date_edited(self.text);
+                                        }
+                                    }
+
+                                    if (root.inspector_draft_death_date == "" && !death_input.has-focus) : Text {
+                                        x: 12px;
+                                        y: 0px;
+                                        width: parent.width - 24px;
+                                        height: parent.height;
+                                        text: "Optional";
+                                        color: #b69f8b;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 10px;
+
+                                    TouchArea {
+                                        height: 38px;
+
+                                        Rectangle {
+                                            width: parent.width;
+                                            height: parent.height;
+                                            background: #ead8c5;
+                                            border-radius: 12px;
+                                            border-color: #c79f77;
+                                            border-width: 1px;
+
+                                            Text {
+                                                text: "Save";
+                                                color: #4f3b2e;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        clicked => {
+                                            root.confirm_person_delete = false;
+                                            root.inspector_edit_saved();
+                                        }
+                                    }
+
+                                    TouchArea {
+                                        height: 38px;
+
+                                        Rectangle {
+                                            width: parent.width;
+                                            height: parent.height;
+                                            background: #f7efe6;
+                                            border-radius: 12px;
+                                            border-color: #decfbd;
+                                            border-width: 1px;
+
+                                            Text {
+                                                text: "Cancel";
+                                                color: #6b5645;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        clicked => {
+                                            root.confirm_person_delete = false;
+                                            root.inspector_edit_canceled();
+                                        }
+                                    }
+                                }
+
+                                if (!root.confirm_person_delete) : TouchArea {
+                                    height: 38px;
+
+                                    Rectangle {
+                                        width: parent.width;
+                                        height: parent.height;
+                                        background: #f1e0d2;
+                                        border-radius: 12px;
+                                        border-color: #c79f77;
+                                        border-width: 1px;
+
+                                        Text {
+                                            text: "Delete person";
+                                            color: #6b5645;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    clicked => {
+                                        root.confirm_person_delete = true;
+                                    }
+                                }
+
+                                if (root.confirm_person_delete) : Rectangle {
+                                    background: #f8f1e8;
+                                    border-radius: 12px;
+                                    border-color: #e2d4c3;
+                                    border-width: 1px;
+
+                                    VerticalLayout {
+                                        padding: 14px;
+                                        spacing: 10px;
+
+                                        Text {
+                                            text: "Delete this person?";
+                                            color: #6b5645;
+                                            font-weight: 600;
+                                            wrap: word-wrap;
+                                        }
+
+                                        Text {
+                                            text: "This will also remove all related connections.";
+                                            color: #95806f;
+                                            wrap: word-wrap;
+                                        }
+
+                                        HorizontalLayout {
+                                            spacing: 10px;
+
+                                            TouchArea {
+                                                height: 38px;
+
+                                                Rectangle {
+                                                    width: parent.width;
+                                                    height: parent.height;
+                                                    background: #ead8c5;
+                                                    border-radius: 12px;
+                                                    border-color: #c79f77;
+                                                    border-width: 1px;
+
+                                                    Text {
+                                                        text: "Confirm delete";
+                                                        color: #4f3b2e;
+                                                        horizontal-alignment: center;
+                                                        vertical-alignment: center;
+                                                    }
+                                                }
+
+                                                clicked => {
+                                                    root.confirm_person_delete = false;
+                                                    root.delete_person_requested();
+                                                }
+                                            }
+
+                                            TouchArea {
+                                                height: 38px;
+
+                                                Rectangle {
+                                                    width: parent.width;
+                                                    height: parent.height;
+                                                    background: #f7efe6;
+                                                    border-radius: 12px;
+                                                    border-color: #decfbd;
+                                                    border-width: 1px;
+
+                                                    Text {
+                                                        text: "Cancel";
+                                                        color: #6b5645;
+                                                        horizontal-alignment: center;
+                                                        vertical-alignment: center;
+                                                    }
+                                                }
+
+                                                clicked => {
+                                                    root.confirm_person_delete = false;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                background: #f8f1e8;
+                                border-radius: 12px;
+                                border-color: #e2d4c3;
+                                border-width: 1px;
+
+                                VerticalLayout {
+                                    padding: 14px;
+                                    spacing: 6px;
+
+                                    Text {
+                                        text: "Details";
+                                        color: #6b5645;
+                                        font-weight: 600;
+                                    }
+
+                                    Text {
+                                        text: "No notes or extended details are available yet.";
+                                        color: #95806f;
+                                        wrap: word-wrap;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (root.selected_relationship_id < 0 && root.selected_person_id < 0) : Rectangle {
+                            background: #f7efe6;
+                            border-radius: 12px;
+                            border-color: #e2d4c3;
+                            border-width: 1px;
+
+                            Text {
+                                x: 14px;
+                                y: 14px;
+                                width: parent.width - 28px;
+                                text: "Select a person to view and edit details.";
+                                color: #95806f;
+                                wrap: word-wrap;
+                                horizontal-alignment: center;
+                            }
+                        }
+                    }
                 }
             }
         }

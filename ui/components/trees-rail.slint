@@ -1,6 +1,12 @@
 import { PrimaryButton } from "./primary-button.slint";
 
 export component TreesRail inherits Rectangle {
+    in property <[string]> tree_names: [];
+    in property <[int]> tree_ids: [];
+    in property <int> selected_tree_id: -1;
+
+    callback tree_selected(int);
+
     background: #f7f1ea;
     border-radius: 18px;
     border-color: #e6dacc;
@@ -18,7 +24,7 @@ export component TreesRail inherits Rectangle {
         }
 
         Text {
-            text: "Your family trees will appear here.";
+            text: root.tree_names.length > 0 ? "Choose a tree to open its workspace." : "Your trees will appear here.";
             wrap: word-wrap;
             color: #8a7665;
         }
@@ -34,20 +40,27 @@ export component TreesRail inherits Rectangle {
                 padding: 12px;
                 spacing: 10px;
 
-                for label in [
-                    "Personal Tree",
-                    "Maternal Branch",
-                    "Shared Research"
-                ] : Rectangle {
+                for tree_name[index] in root.tree_names : TouchArea {
                     height: 42px;
-                    background: #f3e7da;
-                    border-radius: 12px;
 
-                    Text {
-                        x: 12px;
-                        y: 12px;
-                        text: label;
-                        color: #6b5645;
+                    clicked => {
+                        root.tree_selected(root.tree_ids[index]);
+                    }
+
+                    Rectangle {
+                        width: parent.width;
+                        height: parent.height;
+                        background: root.selected_tree_id == root.tree_ids[index] ? #ead8c5 : #f3e7da;
+                        border-radius: 12px;
+                        border-width: root.selected_tree_id == root.tree_ids[index] ? 1px : 0px;
+                        border-color: #d5b898;
+
+                        Text {
+                            x: 12px;
+                            y: 12px;
+                            text: tree_name;
+                            color: root.selected_tree_id == root.tree_ids[index] ? #4f3b2e : #6b5645;
+                        }
                     }
                 }
             }

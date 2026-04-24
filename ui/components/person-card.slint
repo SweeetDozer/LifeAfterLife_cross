@@ -1,0 +1,95 @@
+export component PersonCard inherits Rectangle {
+    in property <string> first_name: "";
+    in property <string> middle_name: "";
+    in property <string> last_name: "";
+    in property <string> dates_text: "";
+    in property <bool> selected: false;
+    in property <float> zoom: 1.0;
+
+    width: 232px * zoom;
+    height: 132px * zoom;
+    background: selected ? #ead9c7 : #fffaf5;
+    border-radius: 16px * zoom;
+    border-width: selected ? 2px : 1px;
+    border-color: selected ? #c79f77 : #e6dacc;
+
+    Rectangle {
+        width: 10px * root.zoom;
+        height: 10px * root.zoom;
+        x: parent.width / 2 - self.width / 2;
+        y: -self.height / 2;
+        background: #d8b996;
+        border-radius: self.width / 2;
+    }
+
+    Rectangle {
+        x: 14px * root.zoom;
+        y: root.height / 2 - self.height / 2;
+        width: 68px * root.zoom;
+        height: self.width;
+        background: #f3e8db;
+        border-radius: 12px * root.zoom;
+
+        Text {
+            text: "Photo";
+            color: #9a8574;
+            font-size: 12px * root.zoom;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+
+    Text {
+        x: 96px * root.zoom;
+        y: 14px * root.zoom;
+        width: root.width - (112px * root.zoom);
+        height: 18px * root.zoom;
+        text: root.first_name;
+        color: #4f3b2e;
+        font-size: 15px * root.zoom;
+        font-weight: 600;
+        wrap: word-wrap;
+    }
+
+    Text {
+        x: 96px * root.zoom;
+        y: 36px * root.zoom;
+        width: root.width - (112px * root.zoom);
+        height: 18px * root.zoom;
+        text: root.middle_name;
+        color: #5d493c;
+        font-size: 14px * root.zoom;
+        wrap: word-wrap;
+    }
+
+    Text {
+        x: 96px * root.zoom;
+        y: 58px * root.zoom;
+        width: root.width - (112px * root.zoom);
+        height: 18px * root.zoom;
+        text: root.last_name;
+        color: #5d493c;
+        font-size: 14px * root.zoom;
+        wrap: word-wrap;
+    }
+
+    Text {
+        x: 96px * root.zoom;
+        y: 90px * root.zoom;
+        width: root.width - (118px * root.zoom);
+        height: 24px * root.zoom;
+        text: root.dates_text;
+        color: #8a7665;
+        font-size: 13px * root.zoom;
+        wrap: word-wrap;
+    }
+
+    Rectangle {
+        width: 10px * root.zoom;
+        height: 10px * root.zoom;
+        x: parent.width / 2 - self.width / 2;
+        y: parent.height - self.height / 2;
+        background: #d8b996;
+        border-radius: self.width / 2;
+    }
+}

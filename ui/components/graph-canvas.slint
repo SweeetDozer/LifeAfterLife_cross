@@ -1,4 +1,66 @@
+import { PersonCard } from "./person-card.slint";
+
+export struct PersonNode {
+    id: int,
+    first_name: string,
+    middle_name: string,
+    last_name: string,
+    full_name: string,
+    birth_date: string,
+    death_date: string,
+    dates_text: string,
+    x: float,
+    y: float,
+}
+
+export struct RelationshipLine {
+    id: int,
+    relationship_type: string,
+    start_x: float,
+    start_y: float,
+    end_x: float,
+    end_y: float,
+    hit_x: float,
+    hit_y: float,
+    hit_width: float,
+    hit_height: float,
+    commands: string,
+}
+
 export component GraphCanvas inherits Rectangle {
+    in property <int> selected_tree_id: -1;
+    in property <string> selected_tree_name: "";
+    in property <[PersonNode]> persons: [];
+    in property <[RelationshipLine]> relationship_lines: [];
+    in property <int> selected_person_id: -1;
+    in property <int> selected_relationship_id: -1;
+    in property <bool> is_edit_mode: false;
+    in property <bool> relationship_creation_active: false;
+    in property <bool> relationship_type_selection_visible: false;
+    in property <string> relationship_creation_helper_text: "";
+    in property <float> canvas_offset_x: 0;
+    in property <float> canvas_offset_y: 0;
+    in property <float> canvas_zoom: 1.0;
+    private property <bool> panning_active: false;
+    private property <float> pan_start_mouse_x: 0;
+    private property <float> pan_start_mouse_y: 0;
+    private property <float> pan_start_offset_x: 0;
+    private property <float> pan_start_offset_y: 0;
+    private property <length> canvas_header_height: 86px;
+    private property <length> canvas_inner_padding: 20px;
+
+    callback person_selected(int);
+    callback relationship_selected(float, float);
+    callback person_moved(int, float, float);
+    callback add_person_requested();
+    callback relationship_creation_started();
+    callback relationship_creation_canceled();
+    callback relationship_type_selected(string);
+    callback toggle_edit_mode();
+    callback canvas_selection_cleared();
+    callback canvas_panned(float, float);
+    callback canvas_zoom_changed(float);
+
     background: #fffaf5;
     border-radius: 20px;
     border-color: #eadfce;
@@ -28,23 +90,338 @@ export component GraphCanvas inherits Rectangle {
             border-color: #eee2d3;
             border-width: 1px;
 
-            VerticalLayout {
+            if (root.selected_tree_id < 0) : VerticalLayout {
                 alignment: center;
                 padding: 24px;
                 spacing: 8px;
 
                 Text {
-                    text: "Graph workspace placeholder";
+                    text: "Select or create a tree to begin";
                     font-size: 20px;
                     color: #6b5645;
                     horizontal-alignment: center;
                 }
 
                 Text {
-                    text: "Nodes, edges, and canvas interactions will be added later.";
+                    text: "Choose a tree from the sidebar to open its graph workspace.";
                     color: #9a8574;
                     wrap: word-wrap;
                     horizontal-alignment: center;
+                }
+            }
+
+            if (root.selected_tree_id >= 0) : Rectangle {
+                background: transparent;
+
+                Text {
+                    x: root.canvas_inner_padding;
+                    y: 20px;
+                    text: "Tree: " + root.selected_tree_name;
+                    font-size: 20px;
+                    color: #6b5645;
+                }
+
+                Text {
+                    x: root.canvas_inner_padding;
+                    y: 50px;
+                    text: root.relationship_creation_active ? root.relationship_creation_helper_text : "Click a person card to view its details.";
+                    color: #9a8574;
+                }
+
+                TouchArea {
+                    x: parent.width - root.canvas_inner_padding - 464px;
+                    y: 20px;
+                    width: 148px;
+                    height: 36px;
+
+                    clicked => {
+                        root.add_person_requested();
+                    }
+
+                    Rectangle {
+                        width: parent.width;
+                        height: parent.height;
+                        background: #f7efe6;
+                        border-radius: 12px;
+                        border-width: 1px;
+                        border-color: #decfbd;
+
+                        Text {
+                            text: "+ Add Person";
+                            color: #6b5645;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                TouchArea {
+                    x: parent.width - root.canvas_inner_padding - 304px;
+                    y: 20px;
+                    width: 148px;
+                    height: 36px;
+                    enabled: root.is_edit_mode && !root.relationship_creation_active;
+
+                    clicked => {
+                        if (root.is_edit_mode && !root.relationship_creation_active) {
+                            root.relationship_creation_started();
+                        }
+                    }
+
+                    Rectangle {
+                        width: parent.width;
+                        height: parent.height;
+                        background: root.is_edit_mode && !root.relationship_creation_active ? #f7efe6 : #f1e6da;
+                        border-radius: 12px;
+                        border-width: 1px;
+                        border-color: root.is_edit_mode && !root.relationship_creation_active ? #decfbd : #e3d6c8;
+
+                        Text {
+                            text: "+ Relationship";
+                            color: root.is_edit_mode && !root.relationship_creation_active ? #6b5645 : #aa9685;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                TouchArea {
+                    x: parent.width - root.canvas_inner_padding - self.width;
+                    y: 20px;
+                    width: 140px;
+                    height: 36px;
+
+                    clicked => {
+                        root.toggle_edit_mode();
+                    }
+
+                    Rectangle {
+                        width: parent.width;
+                        height: parent.height;
+                        background: root.is_edit_mode ? #ead8c5 : #f7efe6;
+                        border-radius: 12px;
+                        border-width: 1px;
+                        border-color: root.is_edit_mode ? #c79f77 : #decfbd;
+
+                        Text {
+                            text: root.is_edit_mode ? "Edit Mode" : "View Mode";
+                            color: root.is_edit_mode ? #4f3b2e : #6b5645;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                if (root.relationship_creation_active) : Rectangle {
+                    x: root.canvas_inner_padding;
+                    y: 82px;
+                    width: parent.width - root.canvas_inner_padding * 2;
+                    height: root.relationship_type_selection_visible ? 86px : 48px;
+                    background: #f8f1e8;
+                    border-radius: 14px;
+                    border-color: #e2d4c3;
+                    border-width: 1px;
+
+                    Text {
+                        x: 14px;
+                        y: 14px;
+                        width: parent.width - 120px;
+                        text: root.relationship_creation_helper_text;
+                        color: #6b5645;
+                        vertical-alignment: center;
+                    }
+
+                    TouchArea {
+                        x: parent.width - 90px;
+                        y: 10px;
+                        width: 72px;
+                        height: 28px;
+
+                        clicked => {
+                            root.relationship_creation_canceled();
+                        }
+
+                        Rectangle {
+                            width: parent.width;
+                            height: parent.height;
+                            background: #f7efe6;
+                            border-radius: 10px;
+                            border-width: 1px;
+                            border-color: #decfbd;
+
+                            Text {
+                                text: "Cancel";
+                                color: #6b5645;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+
+                    if (root.relationship_type_selection_visible) : HorizontalLayout {
+                        x: 14px;
+                        y: 46px;
+                        width: parent.width - 28px;
+                        spacing: 8px;
+
+                        for relationship_type in ["parent", "spouse", "sibling", "friend"] : TouchArea {
+                            height: 28px;
+
+                            clicked => {
+                                root.relationship_type_selected(relationship_type);
+                            }
+
+                            Rectangle {
+                                width: parent.width;
+                                height: parent.height;
+                                background: #fffaf5;
+                                border-radius: 10px;
+                                border-width: 1px;
+                                border-color: #decfbd;
+
+                                Text {
+                                    text: relationship_type;
+                                    color: #6b5645;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    x: root.canvas_inner_padding;
+                    y: root.relationship_creation_active ? 178px : root.canvas_header_height;
+                    width: parent.width - root.canvas_inner_padding * 2;
+                    height: parent.height - (root.relationship_creation_active ? 178px : root.canvas_header_height) - root.canvas_inner_padding;
+                    background: transparent;
+                    clip: true;
+
+                    TouchArea {
+                        width: parent.width;
+                        height: parent.height;
+
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.down) {
+                                root.panning_active = true;
+                                root.pan_start_mouse_x = self.mouse_x / 1px;
+                                root.pan_start_mouse_y = self.mouse_y / 1px;
+                                root.pan_start_offset_x = root.canvas_offset_x;
+                                root.pan_start_offset_y = root.canvas_offset_y;
+                            } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
+                                root.panning_active = false;
+                            }
+                        }
+
+                        moved => {
+                            if (root.panning_active) {
+                                root.canvas_panned(
+                                    root.pan_start_offset_x + (self.mouse_x / 1px - root.pan_start_mouse_x),
+                                    root.pan_start_offset_y + (self.mouse_y / 1px - root.pan_start_mouse_y)
+                                );
+                            }
+                        }
+
+                        scroll-event(event) => {
+                            if (event.delta_y < 0) {
+                                root.canvas_zoom_changed(root.canvas_zoom / 1.1);
+                            } else if (event.delta_y > 0) {
+                                root.canvas_zoom_changed(root.canvas_zoom * 1.1);
+                            }
+
+                            return EventResult.accept;
+                        }
+
+                        clicked => {
+                            root.canvas_selection_cleared();
+                        }
+                    }
+
+                    for relationship_line in root.relationship_lines : Rectangle {
+                        width: parent.width;
+                        height: parent.height;
+                        background: transparent;
+
+                        Path {
+                            width: parent.width;
+                            height: parent.height;
+                            viewbox-width: parent.width / 1px;
+                            viewbox-height: parent.height / 1px;
+                            stroke: root.selected_relationship_id == relationship_line.id ? #b98f69 : #d6c4b1;
+                            stroke-width: (root.selected_relationship_id == relationship_line.id ? 4px : 3px) * root.canvas_zoom;
+                            fill: transparent;
+                            commands: relationship_line.commands;
+                        }
+
+                        TouchArea {
+                            x: relationship_line.hit_x * 1px;
+                            y: relationship_line.hit_y * 1px;
+                            width: relationship_line.hit_width * 1px;
+                            height: relationship_line.hit_height * 1px;
+
+                            clicked => {
+                                root.relationship_selected(self.x / 1px + self.mouse_x / 1px, self.y / 1px + self.mouse_y / 1px);
+                            }
+                        }
+                    }
+
+                    for person in root.persons : TouchArea {
+                        private property <bool> dragging: false;
+                        private property <float> drag_start_pointer_x: 0;
+                        private property <float> drag_start_pointer_y: 0;
+                        private property <float> drag_start_person_x: 0;
+                        private property <float> drag_start_person_y: 0;
+
+                        x: person.x * root.canvas_zoom * 1px + root.canvas_offset_x * 1px;
+                        y: person.y * root.canvas_zoom * 1px + root.canvas_offset_y * 1px;
+                        width: 232px * root.canvas_zoom;
+                        height: 132px * root.canvas_zoom;
+
+                        pointer-event(event) => {
+                            if (!root.is_edit_mode || root.relationship_creation_active) {
+                                return;
+                            }
+
+                            if (event.kind == PointerEventKind.down) {
+                                self.dragging = true;
+                                root.panning_active = false;
+                                root.pan_start_mouse_x = 0;
+                                root.pan_start_mouse_y = 0;
+                                self.drag_start_pointer_x = self.x / 1px + self.mouse_x / 1px;
+                                self.drag_start_pointer_y = self.y / 1px + self.mouse_y / 1px;
+                                self.drag_start_person_x = person.x;
+                                self.drag_start_person_y = person.y;
+                            } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
+                                self.dragging = false;
+                            }
+                        }
+
+                        moved => {
+                            if (root.is_edit_mode && !root.relationship_creation_active && self.dragging) {
+                                root.person_moved(
+                                    person.id,
+                                    self.drag_start_person_x + (((self.x / 1px + self.mouse_x / 1px) - self.drag_start_pointer_x) / root.canvas_zoom),
+                                    self.drag_start_person_y + (((self.y / 1px + self.mouse_y / 1px) - self.drag_start_pointer_y) / root.canvas_zoom)
+                                );
+                            }
+                        }
+
+                        clicked => {
+                            root.person_selected(person.id);
+                        }
+
+                        PersonCard {
+                            width: parent.width;
+                            height: parent.height;
+                            first_name: person.first_name;
+                            middle_name: person.middle_name;
+                            last_name: person.last_name;
+                            dates_text: person.dates_text;
+                            selected: root.selected_person_id == person.id;
+                            zoom: root.canvas_zoom;
+                        }
+                    }
                 }
             }
         }
