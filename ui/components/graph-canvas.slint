@@ -1,4 +1,5 @@
 import { PersonCard } from "./person-card.slint";
+import { Strings } from "../i18n/strings.slint";
 
 export struct PersonNode {
     id: int,
@@ -18,6 +19,10 @@ export struct RelationshipLine {
     relationship_type: string,
     start_x: float,
     start_y: float,
+    control_1_x: float,
+    control_1_y: float,
+    control_2_x: float,
+    control_2_y: float,
     end_x: float,
     end_y: float,
     hit_x: float,
@@ -37,7 +42,7 @@ export component GraphCanvas inherits Rectangle {
     in property <bool> is_edit_mode: false;
     in property <bool> relationship_creation_active: false;
     in property <bool> relationship_type_selection_visible: false;
-    in property <string> relationship_creation_helper_text: "";
+    in property <int> relationship_creation_step: 0;
     in property <float> canvas_offset_x: 0;
     in property <float> canvas_offset_y: 0;
     in property <float> canvas_zoom: 1.0;
@@ -46,108 +51,98 @@ export component GraphCanvas inherits Rectangle {
     private property <float> pan_start_mouse_y: 0;
     private property <float> pan_start_offset_x: 0;
     private property <float> pan_start_offset_y: 0;
-    private property <length> canvas_header_height: 86px;
-    private property <length> canvas_inner_padding: 20px;
+    private property <float> click_drag_threshold: 6.0;
+    private property <length> canvas_header_height: 56px;
+    private property <length> canvas_inner_padding: 12px;
+    private property <string> relationship_creation_helper_text:
+        root.relationship_creation_step == 1 ? Strings.relationship_helper_first
+        : root.relationship_creation_step == 2 ? Strings.relationship_helper_second
+        : root.relationship_creation_step == 3 ? Strings.relationship_helper_type
+        : "";
 
     callback person_selected(int);
-    callback relationship_selected(float, float);
+    callback relationship_selected(int);
+    callback relationship_hit_test_requested(float, float);
+    callback person_move_started(int);
     callback person_moved(int, float, float);
+    callback person_move_finished(int, float, float);
     callback add_person_requested();
     callback relationship_creation_started();
     callback relationship_creation_canceled();
     callback relationship_type_selected(string);
+    callback auto_layout_requested();
     callback toggle_edit_mode();
     callback canvas_selection_cleared();
     callback canvas_panned(float, float);
     callback canvas_zoom_changed(float);
 
-    background: #fffaf5;
-    border-radius: 20px;
-    border-color: #eadfce;
-    border-width: 1px;
+    background: transparent;
 
-    VerticalLayout {
-        padding: 28px;
-        spacing: 14px;
+    if (root.selected_tree_id < 0) : VerticalLayout {
+        alignment: center;
+        padding: 24px;
+        spacing: 8px;
 
         Text {
-            text: "Family Graph";
-            font-size: 26px;
-            font-weight: 600;
-            color: #5b4738;
+            text: Strings.graph_empty_title;
+            font-size: 20px;
+            color: #6b5645;
+            horizontal-alignment: center;
         }
 
         Text {
-            text: "This workspace will show the family graph editor and relationships once tree data is connected.";
+            text: Strings.graph_empty_hint;
+            color: #9a8574;
             wrap: word-wrap;
-            color: #87715f;
+            horizontal-alignment: center;
         }
+    }
+
+    if (root.selected_tree_id >= 0) : Rectangle {
+        background: transparent;
 
         Rectangle {
-            vertical-stretch: 1;
-            background: #fcf6ef;
-            border-radius: 16px;
-            border-color: #eee2d3;
-            border-width: 1px;
+            x: root.canvas_inner_padding;
+            y: 12px;
+            width: parent.width - root.canvas_inner_padding * 2;
+            height: 36px;
+            background: transparent;
 
-            if (root.selected_tree_id < 0) : VerticalLayout {
-                alignment: center;
-                padding: 24px;
-                spacing: 8px;
+            HorizontalLayout {
+                width: parent.width;
+                height: parent.height;
+                spacing: 10px;
 
                 Text {
-                    text: "Select or create a tree to begin";
+                    text: root.relationship_creation_active ? root.relationship_creation_helper_text : Strings.tree_prefix + root.selected_tree_name;
                     font-size: 20px;
                     color: #6b5645;
-                    horizontal-alignment: center;
+                    vertical-alignment: center;
                 }
 
-                Text {
-                    text: "Choose a tree from the sidebar to open its graph workspace.";
-                    color: #9a8574;
-                    wrap: word-wrap;
-                    horizontal-alignment: center;
-                }
-            }
-
-            if (root.selected_tree_id >= 0) : Rectangle {
-                background: transparent;
-
-                Text {
-                    x: root.canvas_inner_padding;
-                    y: 20px;
-                    text: "Tree: " + root.selected_tree_name;
-                    font-size: 20px;
-                    color: #6b5645;
+                Rectangle {
+                    horizontal-stretch: 1;
+                    background: transparent;
                 }
 
-                Text {
-                    x: root.canvas_inner_padding;
-                    y: 50px;
-                    text: root.relationship_creation_active ? root.relationship_creation_helper_text : "Click a person card to view its details.";
-                    color: #9a8574;
-                }
-
-                TouchArea {
-                    x: parent.width - root.canvas_inner_padding - 464px;
-                    y: 20px;
+                if (root.is_edit_mode) : TouchArea {
                     width: 148px;
                     height: 36px;
 
                     clicked => {
-                        root.add_person_requested();
+                        root.auto_layout_requested();
                     }
 
                     Rectangle {
                         width: parent.width;
                         height: parent.height;
-                        background: #f7efe6;
+                        background: parent.has-hover ? #efe2d4 : #f7efe6;
                         border-radius: 12px;
                         border-width: 1px;
-                        border-color: #decfbd;
+                        border-color: parent.has-hover ? #ccb59c : #decfbd;
 
                         Text {
-                            text: "+ Add Person";
+                            text: "Auto layout";
                             color: #6b5645;
                             horizontal-alignment: center;
                             vertical-alignment: center;
@@ -156,8 +151,34 @@ export component GraphCanvas inherits Rectangle {
                 }
 
                 TouchArea {
-                    x: parent.width - root.canvas_inner_padding - 304px;
-                    y: 20px;
+                    width: 148px;
+                    height: 36px;
+                    enabled: root.is_edit_mode && !root.relationship_creation_active;
+
+                    clicked => {
+                        if (root.is_edit_mode && !root.relationship_creation_active) {
+                            root.add_person_requested();
+                        }
+                    }
+
+                    Rectangle {
+                        width: parent.width;
+                        height: parent.height;
+                        background: root.is_edit_mode && !root.relationship_creation_active ? (parent.has-hover ? #efe2d4 : #f7efe6) : #f1e6da;
+                        border-radius: 12px;
+                        border-width: 1px;
+                        border-color: root.is_edit_mode && !root.relationship_creation_active ? (parent.has-hover ? #ccb59c : #decfbd) : #e3d6c8;
+
+                        Text {
+                            text: Strings.add_person_action;
+                            color: root.is_edit_mode && !root.relationship_creation_active ? #6b5645 : #aa9685;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                TouchArea {
                     width: 148px;
                     height: 36px;
                     enabled: root.is_edit_mode && !root.relationship_creation_active;
@@ -171,13 +192,13 @@ export component GraphCanvas inherits Rectangle {
                     Rectangle {
                         width: parent.width;
                         height: parent.height;
-                        background: root.is_edit_mode && !root.relationship_creation_active ? #f7efe6 : #f1e6da;
+                        background: root.is_edit_mode && !root.relationship_creation_active ? (parent.has-hover ? #efe2d4 : #f7efe6) : #f1e6da;
                         border-radius: 12px;
                         border-width: 1px;
-                        border-color: root.is_edit_mode && !root.relationship_creation_active ? #decfbd : #e3d6c8;
+                        border-color: root.is_edit_mode && !root.relationship_creation_active ? (parent.has-hover ? #ccb59c : #decfbd) : #e3d6c8;
 
                         Text {
-                            text: "+ Relationship";
+                            text: Strings.add_relationship_action;
                             color: root.is_edit_mode && !root.relationship_creation_active ? #6b5645 : #aa9685;
                             horizontal-alignment: center;
                             vertical-alignment: center;
@@ -186,8 +207,6 @@ export component GraphCanvas inherits Rectangle {
                 }
 
                 TouchArea {
-                    x: parent.width - root.canvas_inner_padding - self.width;
-                    y: 20px;
                     width: 140px;
                     height: 36px;
 
@@ -198,230 +217,276 @@ export component GraphCanvas inherits Rectangle {
                     Rectangle {
                         width: parent.width;
                         height: parent.height;
-                        background: root.is_edit_mode ? #ead8c5 : #f7efe6;
+                        background: root.is_edit_mode ? (parent.has-hover ? #e2ccb4 : #ead8c5) : (parent.has-hover ? #efe2d4 : #f7efe6);
                         border-radius: 12px;
                         border-width: 1px;
-                        border-color: root.is_edit_mode ? #c79f77 : #decfbd;
+                        border-color: root.is_edit_mode ? (parent.has-hover ? #b98858 : #c79f77) : (parent.has-hover ? #ccb59c : #decfbd);
 
                         Text {
-                            text: root.is_edit_mode ? "Edit Mode" : "View Mode";
+                            text: root.is_edit_mode ? Strings.edit_mode_label : Strings.view_mode_label;
                             color: root.is_edit_mode ? #4f3b2e : #6b5645;
                             horizontal-alignment: center;
                             vertical-alignment: center;
                         }
                     }
                 }
+            }
+        }
 
-                if (root.relationship_creation_active) : Rectangle {
-                    x: root.canvas_inner_padding;
-                    y: 82px;
-                    width: parent.width - root.canvas_inner_padding * 2;
-                    height: root.relationship_type_selection_visible ? 86px : 48px;
-                    background: #f8f1e8;
-                    border-radius: 14px;
-                    border-color: #e2d4c3;
-                    border-width: 1px;
+        if (root.relationship_creation_active) : Rectangle {
+            x: root.canvas_inner_padding;
+            y: 66px;
+            width: parent.width - root.canvas_inner_padding * 2;
+            height: root.relationship_type_selection_visible ? 112px : 72px;
+            background: #f8f1e8;
+            border-radius: 14px;
+            border-color: #e2d4c3;
+            border-width: 1px;
 
-                    Text {
-                        x: 14px;
-                        y: 14px;
-                        width: parent.width - 120px;
-                        text: root.relationship_creation_helper_text;
-                        color: #6b5645;
-                        vertical-alignment: center;
-                    }
+            helper_text := Text {
+                x: 14px;
+                y: 14px;
+                width: parent.width - 120px;
+                text: root.relationship_creation_helper_text;
+                color: #6b5645;
+                wrap: word-wrap;
+            }
 
-                    TouchArea {
-                        x: parent.width - 90px;
-                        y: 10px;
-                        width: 72px;
-                        height: 28px;
+            TouchArea {
+                x: parent.width - 90px;
+                y: 10px;
+                width: 72px;
+                height: 28px;
 
-                        clicked => {
-                            root.relationship_creation_canceled();
-                        }
-
-                        Rectangle {
-                            width: parent.width;
-                            height: parent.height;
-                            background: #f7efe6;
-                            border-radius: 10px;
-                            border-width: 1px;
-                            border-color: #decfbd;
-
-                            Text {
-                                text: "Cancel";
-                                color: #6b5645;
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
-                            }
-                        }
-                    }
-
-                    if (root.relationship_type_selection_visible) : HorizontalLayout {
-                        x: 14px;
-                        y: 46px;
-                        width: parent.width - 28px;
-                        spacing: 8px;
-
-                        for relationship_type in ["parent", "spouse", "sibling", "friend"] : TouchArea {
-                            height: 28px;
-
-                            clicked => {
-                                root.relationship_type_selected(relationship_type);
-                            }
-
-                            Rectangle {
-                                width: parent.width;
-                                height: parent.height;
-                                background: #fffaf5;
-                                border-radius: 10px;
-                                border-width: 1px;
-                                border-color: #decfbd;
-
-                                Text {
-                                    text: relationship_type;
-                                    color: #6b5645;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                    }
+                clicked => {
+                    root.relationship_creation_canceled();
                 }
 
                 Rectangle {
-                    x: root.canvas_inner_padding;
-                    y: root.relationship_creation_active ? 178px : root.canvas_header_height;
-                    width: parent.width - root.canvas_inner_padding * 2;
-                    height: parent.height - (root.relationship_creation_active ? 178px : root.canvas_header_height) - root.canvas_inner_padding;
-                    background: transparent;
-                    clip: true;
+                    width: parent.width;
+                    height: parent.height;
+                    background: parent.has-hover ? #efe2d4 : #f7efe6;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: parent.has-hover ? #ccb59c : #decfbd;
 
-                    TouchArea {
+                    Text {
+                        text: Strings.cancel_action;
+                        color: #6b5645;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            if (root.relationship_type_selection_visible) : HorizontalLayout {
+                x: 14px;
+                y: 46px;
+                width: parent.width - 28px;
+                spacing: 8px;
+
+                for relationship_type[index] in Strings.relationship_type_values : TouchArea {
+                    height: 28px;
+                    enabled: root.is_edit_mode;
+
+                    clicked => {
+                        if (root.is_edit_mode) {
+                            root.relationship_type_selected(relationship_type);
+                        }
+                    }
+
+                    Rectangle {
                         width: parent.width;
                         height: parent.height;
+                        background: root.is_edit_mode ? (parent.has-hover ? #f7eee3 : #fffaf5) : #f1e6da;
+                        border-radius: 10px;
+                        border-width: 1px;
+                        border-color: root.is_edit_mode ? (parent.has-hover ? #ccb59c : #decfbd) : #e3d6c8;
 
-                        pointer-event(event) => {
-                            if (event.kind == PointerEventKind.down) {
-                                root.panning_active = true;
-                                root.pan_start_mouse_x = self.mouse_x / 1px;
-                                root.pan_start_mouse_y = self.mouse_y / 1px;
-                                root.pan_start_offset_x = root.canvas_offset_x;
-                                root.pan_start_offset_y = root.canvas_offset_y;
-                            } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
-                                root.panning_active = false;
-                            }
-                        }
-
-                        moved => {
-                            if (root.panning_active) {
-                                root.canvas_panned(
-                                    root.pan_start_offset_x + (self.mouse_x / 1px - root.pan_start_mouse_x),
-                                    root.pan_start_offset_y + (self.mouse_y / 1px - root.pan_start_mouse_y)
-                                );
-                            }
-                        }
-
-                        scroll-event(event) => {
-                            if (event.delta_y < 0) {
-                                root.canvas_zoom_changed(root.canvas_zoom / 1.1);
-                            } else if (event.delta_y > 0) {
-                                root.canvas_zoom_changed(root.canvas_zoom * 1.1);
-                            }
-
-                            return EventResult.accept;
-                        }
-
-                        clicked => {
-                            root.canvas_selection_cleared();
+                        Text {
+                            text: Strings.relationship_type_labels[index];
+                            color: root.is_edit_mode ? #6b5645 : #aa9685;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
                         }
                     }
+                }
+            }
+        }
 
-                    for relationship_line in root.relationship_lines : Rectangle {
-                        width: parent.width;
-                        height: parent.height;
-                        background: transparent;
+        Rectangle {
+            x: root.canvas_inner_padding;
+            y: root.relationship_creation_active ? 190px : root.canvas_header_height;
+            width: parent.width - root.canvas_inner_padding * 2;
+            height: parent.height - (root.relationship_creation_active ? 190px : root.canvas_header_height) - root.canvas_inner_padding;
+            background: transparent;
+            clip: true;
 
-                        Path {
-                            width: parent.width;
-                            height: parent.height;
-                            viewbox-width: parent.width / 1px;
-                            viewbox-height: parent.height / 1px;
-                            stroke: root.selected_relationship_id == relationship_line.id ? #b98f69 : #d6c4b1;
-                            stroke-width: (root.selected_relationship_id == relationship_line.id ? 4px : 3px) * root.canvas_zoom;
-                            fill: transparent;
-                            commands: relationship_line.commands;
-                        }
+            TouchArea {
+                width: parent.width;
+                height: parent.height;
 
-                        TouchArea {
-                            x: relationship_line.hit_x * 1px;
-                            y: relationship_line.hit_y * 1px;
-                            width: relationship_line.hit_width * 1px;
-                            height: relationship_line.hit_height * 1px;
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down) {
+                        root.panning_active = true;
+                        root.pan_start_mouse_x = self.mouse_x / 1px;
+                        root.pan_start_mouse_y = self.mouse_y / 1px;
+                        root.pan_start_offset_x = root.canvas_offset_x;
+                        root.pan_start_offset_y = root.canvas_offset_y;
+                    } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
+                        root.panning_active = false;
+                    }
+                }
 
-                            clicked => {
-                                root.relationship_selected(self.x / 1px + self.mouse_x / 1px, self.y / 1px + self.mouse_y / 1px);
-                            }
-                        }
+                moved => {
+                    if (root.panning_active) {
+                        root.canvas_panned(
+                            root.pan_start_offset_x + (self.mouse_x / 1px - root.pan_start_mouse_x),
+                            root.pan_start_offset_y + (self.mouse_y / 1px - root.pan_start_mouse_y)
+                        );
+                    }
+                }
+
+                scroll-event(event) => {
+                    if (event.delta_y < 0) {
+                        root.canvas_zoom_changed(root.canvas_zoom / 1.1);
+                    } else if (event.delta_y > 0) {
+                        root.canvas_zoom_changed(root.canvas_zoom * 1.1);
                     }
 
-                    for person in root.persons : TouchArea {
-                        private property <bool> dragging: false;
-                        private property <float> drag_start_pointer_x: 0;
-                        private property <float> drag_start_pointer_y: 0;
-                        private property <float> drag_start_person_x: 0;
-                        private property <float> drag_start_person_y: 0;
+                    return EventResult.accept;
+                }
 
-                        x: person.x * root.canvas_zoom * 1px + root.canvas_offset_x * 1px;
-                        y: person.y * root.canvas_zoom * 1px + root.canvas_offset_y * 1px;
-                        width: 232px * root.canvas_zoom;
-                        height: 132px * root.canvas_zoom;
+                clicked => {
+                    root.relationship_hit_test_requested(self.mouse_x / 1px, self.mouse_y / 1px);
+                }
+            }
 
-                        pointer-event(event) => {
-                            if (!root.is_edit_mode || root.relationship_creation_active) {
-                                return;
-                            }
+            for relationship_line in root.relationship_lines : Path {
+                private property <brush> base_stroke:
+                    relationship_line.relationship_type == "parent" ? #b88746
+                    : relationship_line.relationship_type == "spouse" ? #c47a7a
+                    : relationship_line.relationship_type == "sibling" ? #7f9b68
+                    : #6f93b8;
+                private property <brush> selected_stroke:
+                    relationship_line.relationship_type == "parent" ? #93692f
+                    : relationship_line.relationship_type == "spouse" ? #a85f5f
+                    : relationship_line.relationship_type == "sibling" ? #64804f
+                    : #54779a;
+                width: parent.width;
+                height: parent.height;
+                viewbox-width: parent.width / 1px;
+                viewbox-height: parent.height / 1px;
+                stroke: #7b6858;
+                stroke-width: (root.selected_relationship_id == relationship_line.id ? 10px : 7px) * root.canvas_zoom;
+                stroke-line-cap: round;
+                stroke-line-join: round;
+                fill: transparent;
+                commands: relationship_line.commands;
+            }
 
-                            if (event.kind == PointerEventKind.down) {
-                                self.dragging = true;
-                                root.panning_active = false;
-                                root.pan_start_mouse_x = 0;
-                                root.pan_start_mouse_y = 0;
-                                self.drag_start_pointer_x = self.x / 1px + self.mouse_x / 1px;
-                                self.drag_start_pointer_y = self.y / 1px + self.mouse_y / 1px;
-                                self.drag_start_person_x = person.x;
-                                self.drag_start_person_y = person.y;
-                            } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
-                                self.dragging = false;
-                            }
+            for relationship_line in root.relationship_lines : Path {
+                private property <brush> base_stroke:
+                    relationship_line.relationship_type == "parent" ? #b88746
+                    : relationship_line.relationship_type == "spouse" ? #c47a7a
+                    : relationship_line.relationship_type == "sibling" ? #7f9b68
+                    : #6f93b8;
+                private property <brush> selected_stroke:
+                    relationship_line.relationship_type == "parent" ? #93692f
+                    : relationship_line.relationship_type == "spouse" ? #a85f5f
+                    : relationship_line.relationship_type == "sibling" ? #64804f
+                    : #54779a;
+                width: parent.width;
+                height: parent.height;
+                viewbox-width: parent.width / 1px;
+                viewbox-height: parent.height / 1px;
+                stroke: root.selected_relationship_id == relationship_line.id ? self.selected_stroke : self.base_stroke;
+                stroke-width: (root.selected_relationship_id == relationship_line.id ? 5px : 3px) * root.canvas_zoom;
+                stroke-line-cap: round;
+                stroke-line-join: round;
+                fill: transparent;
+                commands: relationship_line.commands;
+            }
+
+            for person in root.persons : TouchArea {
+                private property <bool> dragging: false;
+                private property <bool> suppress_click: false;
+                private property <float> press_start_mouse_x: 0;
+                private property <float> press_start_mouse_y: 0;
+                private property <float> drag_start_pointer_x: 0;
+                private property <float> drag_start_pointer_y: 0;
+                private property <float> drag_start_person_x: 0;
+                private property <float> drag_start_person_y: 0;
+
+                x: person.x * root.canvas_zoom * 1px + root.canvas_offset_x * 1px;
+                y: person.y * root.canvas_zoom * 1px + root.canvas_offset_y * 1px;
+                width: 232px * root.canvas_zoom;
+                height: 132px * root.canvas_zoom;
+
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down) {
+                        self.suppress_click = false;
+                        self.press_start_mouse_x = self.mouse_x / 1px;
+                        self.press_start_mouse_y = self.mouse_y / 1px;
+
+                        if (root.is_edit_mode && !root.relationship_creation_active) {
+                            self.dragging = true;
+                            root.person_move_started(person.id);
+                            root.panning_active = false;
+                            root.pan_start_mouse_x = 0;
+                            root.pan_start_mouse_y = 0;
+                            self.drag_start_pointer_x = self.x / 1px + self.mouse_x / 1px;
+                            self.drag_start_pointer_y = self.y / 1px + self.mouse_y / 1px;
+                            self.drag_start_person_x = person.x;
+                            self.drag_start_person_y = person.y;
                         }
-
-                        moved => {
-                            if (root.is_edit_mode && !root.relationship_creation_active && self.dragging) {
-                                root.person_moved(
-                                    person.id,
-                                    self.drag_start_person_x + (((self.x / 1px + self.mouse_x / 1px) - self.drag_start_pointer_x) / root.canvas_zoom),
-                                    self.drag_start_person_y + (((self.y / 1px + self.mouse_y / 1px) - self.drag_start_pointer_y) / root.canvas_zoom)
-                                );
-                            }
+                    } else if (event.kind == PointerEventKind.up) {
+                        if (root.is_edit_mode && !root.relationship_creation_active && self.dragging) {
+                            root.person_move_finished(
+                                person.id,
+                                self.drag_start_person_x + (((self.x / 1px + self.mouse_x / 1px) - self.drag_start_pointer_x) / root.canvas_zoom),
+                                self.drag_start_person_y + (((self.y / 1px + self.mouse_y / 1px) - self.drag_start_pointer_y) / root.canvas_zoom)
+                            );
                         }
-
-                        clicked => {
-                            root.person_selected(person.id);
-                        }
-
-                        PersonCard {
-                            width: parent.width;
-                            height: parent.height;
-                            first_name: person.first_name;
-                            middle_name: person.middle_name;
-                            last_name: person.last_name;
-                            dates_text: person.dates_text;
-                            selected: root.selected_person_id == person.id;
-                            zoom: root.canvas_zoom;
-                        }
+                        self.dragging = false;
+                    } else if (event.kind == PointerEventKind.cancel) {
+                        self.dragging = false;
                     }
+                }
+
+                moved => {
+                    if (abs(self.mouse_x / 1px - self.press_start_mouse_x) > root.click_drag_threshold
+                        || abs(self.mouse_y / 1px - self.press_start_mouse_y) > root.click_drag_threshold) {
+                        self.suppress_click = true;
+                    }
+
+                    if (root.is_edit_mode && !root.relationship_creation_active && self.dragging) {
+                        root.person_moved(
+                            person.id,
+                            self.drag_start_person_x + (((self.x / 1px + self.mouse_x / 1px) - self.drag_start_pointer_x) / root.canvas_zoom),
+                            self.drag_start_person_y + (((self.y / 1px + self.mouse_y / 1px) - self.drag_start_pointer_y) / root.canvas_zoom)
+                        );
+                    }
+                }
+
+                clicked => {
+                    if (!self.suppress_click) {
+                        root.person_selected(person.id);
+                    }
+                    self.suppress_click = false;
+                }
+
+                PersonCard {
+                    width: parent.width;
+                    height: parent.height;
+                    first_name: person.first_name;
+                    middle_name: person.middle_name;
+                    last_name: person.last_name;
+                    birth_date: person.birth_date;
+                    death_date: person.death_date;
+                    selected: root.selected_person_id == person.id;
+                    hovered: parent.has-hover;
+                    zoom: root.canvas_zoom;
                 }
             }
         }

@@ -1,0 +1,89 @@
+export global Strings {
+    in property <string> current_language: "en";
+    in property <string> app_name: "LifeAfterLife";
+
+    in property <string> login_status_default: current_language == "ru" ? "Введите ваши данные" : "Enter your credentials";
+    in property <string> register_status_default: current_language == "ru" ? "Создайте новую учетную запись" : "Create a new account";
+    in property <string> auth_status_missing_fields: current_language == "ru" ? "Пожалуйста, заполните email и пароль." : "Please fill in both email and password.";
+    in property <string> login_status_ready: current_language == "ru" ? "Запрос на вход готов." : "Login request is ready.";
+    in property <string> register_status_ready: current_language == "ru" ? "Запрос на регистрацию готов." : "Registration request is ready.";
+
+    in property <string> login_title: current_language == "ru" ? "Вход в учетную запись" : "Login to your account";
+    in property <string> register_title: current_language == "ru" ? "Создайте учетную запись" : "Create your account";
+    in property <string> email_label: "Email";
+    in property <string> email_placeholder: "example@mail.com";
+    in property <string> password_label: current_language == "ru" ? "Пароль" : "Password";
+    in property <string> confirm_password_label: current_language == "ru" ? "Подтвердите пароль" : "Confirm password";
+    in property <string> password_placeholder_login: current_language == "ru" ? "Введите пароль" : "Enter password";
+    in property <string> password_placeholder_register: current_language == "ru" ? "Создайте пароль" : "Create password";
+    in property <string> confirm_password_placeholder: current_language == "ru" ? "Повторите пароль" : "Repeat password";
+    in property <string> show_password_action: current_language == "ru" ? "Показать" : "Show";
+    in property <string> hide_password_action: current_language == "ru" ? "Скрыть" : "Hide";
+    in property <string> login_action: current_language == "ru" ? "Войти" : "Log in";
+    in property <string> register_action: current_language == "ru" ? "Зарегистрироваться" : "Register";
+    in property <string> create_account_action: current_language == "ru" ? "Создать аккаунт" : "Create account";
+    in property <string> back_to_login_action: current_language == "ru" ? "Назад ко входу" : "Back to login";
+    in property <string> register_error_email_required: current_language == "ru" ? "Пожалуйста, введите email." : "Please enter your email.";
+    in property <string> register_error_password_required: current_language == "ru" ? "Пожалуйста, введите пароль." : "Please enter a password.";
+    in property <string> register_error_confirm_password_required: current_language == "ru" ? "Пожалуйста, повторите пароль." : "Please repeat your password.";
+    in property <string> register_error_passwords_do_not_match: current_language == "ru" ? "Пароли не совпадают." : "Passwords do not match.";
+    in property <string> register_account_reminder: current_language == "ru" ? "Пожалуйста, запишите email и пароль в надежном месте, чтобы не потерять доступ." : "Please write down your email and password in a safe place so you do not lose access.";
+
+    in property <string> trees_title: current_language == "ru" ? "Деревья" : "Trees";
+    in property <string> trees_hint_with_items: current_language == "ru" ? "Выберите дерево, чтобы открыть его рабочее пространство." : "Choose a tree to open its workspace.";
+    in property <string> trees_hint_empty: current_language == "ru" ? "Здесь появятся ваши деревья." : "Your trees will appear here.";
+    in property <string> add_tree_action: current_language == "ru" ? "+ Новое дерево" : "+ New Tree";
+
+    in property <string> graph_empty_title: current_language == "ru" ? "Выберите или создайте дерево, чтобы начать" : "Select or create a tree to begin";
+    in property <string> graph_empty_hint: current_language == "ru" ? "Выберите дерево на боковой панели, чтобы открыть рабочее пространство графа." : "Choose a tree from the sidebar to open its graph workspace.";
+    in property <string> tree_prefix: current_language == "ru" ? "Дерево: " : "Tree: ";
+    in property <string> add_person_action: current_language == "ru" ? "+ Добавить человека" : "+ Add Person";
+    in property <string> add_relationship_action: current_language == "ru" ? "+ Добавить связь" : "+ Relationship";
+    in property <string> edit_mode_label: current_language == "ru" ? "Режим редактирования" : "Edit Mode";
+    in property <string> view_mode_label: current_language == "ru" ? "Режим просмотра" : "View Mode";
+    in property <string> cancel_action: current_language == "ru" ? "Отмена" : "Cancel";
+    in property <string> photo_placeholder: current_language == "ru" ? "Фото" : "Photo";
+
+    in property <string> relationship_helper_first: current_language == "ru" ? "Выберите первого человека" : "Select first person";
+    in property <string> relationship_helper_second: current_language == "ru" ? "Выберите второго человека" : "Select second person";
+    in property <string> relationship_helper_type: current_language == "ru" ? "Выберите тип связи" : "Choose relationship type";
+    in property <string> relationship_summary_separator: "->";
+    in property <string> date_range_separator: " - ";
+    in property <string> born_label: current_language == "ru" ? "Родился:" : "Born:";
+    in property <string> died_label: current_language == "ru" ? "Умер:" : "Died:";
+
+    in property <[string]> relationship_type_values: ["parent", "spouse", "sibling", "friend"];
+    in property <[string]> relationship_type_labels: current_language == "ru"
+        ? ["Родитель", "Супруг", "Сиблинг", "Друг"]
+        : ["Parent", "Spouse", "Sibling", "Friend"];
+
+    in property <string> details_title: current_language == "ru" ? "Детали" : "Details";
+    in property <string> unsaved_changes: current_language == "ru" ? "Есть несохраненные изменения" : "Unsaved changes";
+    in property <string> relationship_title: current_language == "ru" ? "Связь" : "Relationship";
+    in property <string> relationship_type_title: current_language == "ru" ? "Тип" : "Type";
+    in property <string> relationship_edit_unavailable: current_language == "ru" ? "Редактирование связей пока недоступно." : "Relationship editing is not available yet.";
+    in property <string> delete_relationship_action: current_language == "ru" ? "Удалить связь" : "Delete relationship";
+    in property <string> select_person_prompt: current_language == "ru" ? "Выберите человека" : "Select a person";
+    in property <string> first_name_label: current_language == "ru" ? "Имя" : "First name";
+    in property <string> middle_name_label: current_language == "ru" ? "Отчество" : "Middle name";
+    in property <string> last_name_label: current_language == "ru" ? "Фамилия" : "Last name";
+    in property <string> dates_label: current_language == "ru" ? "Даты" : "Dates";
+    in property <string> birth_date_label: current_language == "ru" ? "Дата рождения" : "Birth date";
+    in property <string> death_date_label: current_language == "ru" ? "Дата смерти" : "Death date";
+    in property <string> not_set_label: current_language == "ru" ? "Не указано" : "Not set";
+    in property <string> no_dates_available: current_language == "ru" ? "Даты отсутствуют" : "No dates available";
+    in property <string> edit_action: current_language == "ru" ? "Редактировать" : "Edit";
+    in property <string> editing_person_label: current_language == "ru" ? "Редактирование человека" : "Editing person";
+    in property <string> optional_label: current_language == "ru" ? "Необязательно" : "Optional";
+    in property <string> save_action: current_language == "ru" ? "Сохранить" : "Save";
+    in property <string> delete_person_action: current_language == "ru" ? "Удалить человека" : "Delete person";
+    in property <string> confirm_delete_person_title: current_language == "ru" ? "Удалить этого человека?" : "Delete this person?";
+    in property <string> confirm_delete_person_body: current_language == "ru" ? "Это также удалит все связанные связи." : "This will also remove all related connections.";
+    in property <string> confirm_delete_action: current_language == "ru" ? "Подтвердить удаление" : "Confirm delete";
+    in property <string> no_extended_details: current_language == "ru" ? "Пока нет заметок или расширенных деталей." : "No notes or extended details are available yet.";
+    in property <string> select_person_details_prompt: current_language == "ru" ? "Выберите человека, чтобы просмотреть и редактировать детали." : "Select a person to view and edit details.";
+    in property <string> settings_title: current_language == "ru" ? "Настройки" : "Settings";
+    in property <string> language_setting_title: current_language == "ru" ? "Язык" : "Language";
+    in property <string> language_english_label: "English";
+    in property <string> language_russian_label: "Русский";
+}

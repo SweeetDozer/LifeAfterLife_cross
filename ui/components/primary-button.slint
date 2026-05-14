@@ -1,5 +1,60 @@
-import { Button } from "std-widgets.slint";
+export component PrimaryButton inherits Rectangle {
+    in property <string> text: "Button";
+    callback clicked();
 
-export component PrimaryButton inherits Button {
-    height: 42px;
+    private property <length> horizontal_padding: 12px;
+    private property <length> vertical_padding: 5px;
+    private property <length> min_button_width: 30px;
+    private property <length> max_button_width: 220px;
+    private property <length> max_text_width: root.max_button_width - root.horizontal_padding * 2;
+
+    min-width: root.min_button_width;
+    max-width: root.max_button_width;
+    preferred-width: min(root.max_button_width, max(root.min_button_width, measure_label.preferred-width + root.horizontal_padding * 2));
+    preferred-height: max(36px, label.preferred-height + root.vertical_padding * 2);
+    horizontal-stretch: 0;
+
+    background: touch.has-hover ? #efe2d4 : #f7efe6;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: touch.has-hover ? #ccb59c : #decfbd;
+    clip: true;
+
+    touch := TouchArea {
+        width: parent.width;
+        height: parent.height;
+
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    measure_label := Text {
+        text: root.text;
+        color: transparent;
+        font-size: 17px;
+        font-weight: 600;
+        visible: false;
+    }
+
+    HorizontalLayout {
+        width: parent.width;
+        height: parent.height;
+        padding-left: root.horizontal_padding;
+        padding-right: root.horizontal_padding;
+        padding-top: root.vertical_padding;
+        padding-bottom: root.vertical_padding;
+        alignment: center;
+
+        label := Text {
+            width: min(root.max_text_width, measure_label.preferred-width);
+            text: root.text;
+            color: #6b5645;
+            font-size: 17px;
+            font-weight: 600;
+            wrap: word-wrap;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
 }

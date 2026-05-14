@@ -1,24 +1,37 @@
+import { Strings } from "../i18n/strings.slint";
+
 export component PersonCard inherits Rectangle {
     in property <string> first_name: "";
     in property <string> middle_name: "";
     in property <string> last_name: "";
-    in property <string> dates_text: "";
+    in property <string> birth_date: "";
+    in property <string> death_date: "";
     in property <bool> selected: false;
+    in property <bool> hovered: false;
     in property <float> zoom: 1.0;
 
     width: 232px * zoom;
     height: 132px * zoom;
-    background: selected ? #ead9c7 : #fffaf5;
+    background: selected ? #e6cfb8 : (hovered ? #fff5eb : #fffaf5);
     border-radius: 16px * zoom;
-    border-width: selected ? 2px : 1px;
-    border-color: selected ? #c79f77 : #e6dacc;
+    border-width: selected ? 3px : 1px;
+    border-color: selected ? #b07a49 : (hovered ? #d9c5b2 : #e6dacc);
+    clip: true;
+    private property <string> full_name:
+        root.middle_name == ""
+            ? (root.last_name == "" ? root.first_name : root.first_name + "\n" + root.last_name)
+            : (root.last_name == "" ? root.first_name + "\n" + root.middle_name : root.first_name + "\n" + root.middle_name + "\n" + root.last_name);
+    private property <string> birth_line:
+        root.birth_date == "" ? "" : Strings.born_label + " " + root.birth_date;
+    private property <string> death_line:
+        root.death_date == "" ? "" : Strings.died_label + " " + root.death_date;
 
     Rectangle {
         width: 10px * root.zoom;
         height: 10px * root.zoom;
         x: parent.width / 2 - self.width / 2;
         y: -self.height / 2;
-        background: #d8b996;
+        background: selected ? #b98858 : #d8b996;
         border-radius: self.width / 2;
     }
 
@@ -27,11 +40,11 @@ export component PersonCard inherits Rectangle {
         y: root.height / 2 - self.height / 2;
         width: 68px * root.zoom;
         height: self.width;
-        background: #f3e8db;
+        background: root.selected ? #ecd8c4 : (root.hovered ? #efe1d0 : #f3e8db);
         border-radius: 12px * root.zoom;
 
         Text {
-            text: "Photo";
+            text: Strings.photo_placeholder;
             color: #9a8574;
             font-size: 12px * root.zoom;
             horizontal-alignment: center;
@@ -39,49 +52,53 @@ export component PersonCard inherits Rectangle {
         }
     }
 
-    Text {
+    Rectangle {
         x: 96px * root.zoom;
         y: 14px * root.zoom;
         width: root.width - (112px * root.zoom);
-        height: 18px * root.zoom;
-        text: root.first_name;
-        color: #4f3b2e;
-        font-size: 15px * root.zoom;
-        font-weight: 600;
-        wrap: word-wrap;
+        height: 62px * root.zoom;
+        background: transparent;
+
+        Text {
+            width: parent.width;
+            height: parent.height;
+            text: root.full_name;
+            color: root.selected ? #433225 : #4f3b2e;
+            font-size: 15px * root.zoom;
+            font-weight: 600;
+            wrap: word-wrap;
+            overflow: elide;
+        }
     }
 
-    Text {
+    Rectangle {
         x: 96px * root.zoom;
-        y: 36px * root.zoom;
-        width: root.width - (112px * root.zoom);
-        height: 18px * root.zoom;
-        text: root.middle_name;
-        color: #5d493c;
-        font-size: 14px * root.zoom;
-        wrap: word-wrap;
-    }
-
-    Text {
-        x: 96px * root.zoom;
-        y: 58px * root.zoom;
-        width: root.width - (112px * root.zoom);
-        height: 18px * root.zoom;
-        text: root.last_name;
-        color: #5d493c;
-        font-size: 14px * root.zoom;
-        wrap: word-wrap;
-    }
-
-    Text {
-        x: 96px * root.zoom;
-        y: 90px * root.zoom;
+        y: 80px * root.zoom;
         width: root.width - (118px * root.zoom);
-        height: 24px * root.zoom;
-        text: root.dates_text;
-        color: #8a7665;
-        font-size: 13px * root.zoom;
-        wrap: word-wrap;
+        height: 34px * root.zoom;
+        background: transparent;
+
+        VerticalLayout {
+            width: parent.width;
+            height: parent.height;
+            spacing: 2px * root.zoom;
+
+            if (root.birth_line != "") : Text {
+                text: root.birth_line;
+                color: root.selected ? #755f4e : #8a7665;
+                font-size: 12px * root.zoom;
+                wrap: no-wrap;
+                overflow: elide;
+            }
+
+            if (root.death_line != "") : Text {
+                text: root.death_line;
+                color: root.selected ? #755f4e : #8a7665;
+                font-size: 12px * root.zoom;
+                wrap: no-wrap;
+                overflow: elide;
+            }
+        }
     }
 
     Rectangle {
@@ -89,7 +106,7 @@ export component PersonCard inherits Rectangle {
         height: 10px * root.zoom;
         x: parent.width / 2 - self.width / 2;
         y: parent.height - self.height / 2;
-        background: #d8b996;
+        background: selected ? #b98858 : #d8b996;
         border-radius: self.width / 2;
     }
 }

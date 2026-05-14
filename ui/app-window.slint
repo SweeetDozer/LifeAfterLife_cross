@@ -2,21 +2,24 @@ import { LoginPage } from "./pages/login-page.slint";
 import { RegisterPage } from "./pages/register-page.slint";
 import { MainLayout } from "./layouts/main-layout.slint";
 import { PersonNode, RelationshipLine } from "./components/graph-canvas.slint";
+import { Strings } from "./i18n/strings.slint";
 
 export component AppWindow inherits Window {
-    width: current_page == 2 ? 1200px : 420px;
-    height: current_page == 2 ? 760px : 420px;
-    title: "LifeAfterLife";
+    preferred-width: 680px;
+    preferred-height: 820px;
+    min-width: 560px;
+    min-height: 640px;
+    title: Strings.app_name;
 
     in-out property <int> current_page: 0;
 
     in-out property <string> login_email_text: "";
     in-out property <string> login_password_text: "";
-    in-out property <string> login_status_text: "Enter your credentials";
+    in-out property <int> login_status_code: 0;
 
     in-out property <string> register_email_text: "";
     in-out property <string> register_password_text: "";
-    in-out property <string> register_status_text: "Create a new account";
+    in-out property <int> register_status_code: 0;
     in-out property <[string]> tree_names: [];
     in-out property <[int]> tree_ids: [];
     in-out property <int> selected_tree_id: -1;
@@ -26,16 +29,17 @@ export component AppWindow inherits Window {
     in-out property <int> selected_person_id: -1;
     in-out property <int> selected_relationship_id: -1;
     in-out property <string> selected_relationship_type: "";
-    in-out property <string> selected_relationship_from_name: "";
-    in-out property <string> selected_relationship_to_name: "";
-    in-out property <string> selected_relationship_summary: "";
+    in-out property <string> selected_relationship_from_first_name: "";
+    in-out property <string> selected_relationship_from_middle_name: "";
+    in-out property <string> selected_relationship_from_last_name: "";
+    in-out property <string> selected_relationship_to_first_name: "";
+    in-out property <string> selected_relationship_to_middle_name: "";
+    in-out property <string> selected_relationship_to_last_name: "";
     in-out property <string> selected_person_first_name: "";
     in-out property <string> selected_person_middle_name: "";
     in-out property <string> selected_person_last_name: "";
-    in-out property <string> selected_person_full_name: "";
     in-out property <string> selected_person_birth_date: "";
     in-out property <string> selected_person_death_date: "";
-    in-out property <string> selected_person_dates_text: "";
     in-out property <bool> inspector_edit_mode: false;
     in-out property <string> inspector_draft_first_name: "";
     in-out property <string> inspector_draft_middle_name: "";
@@ -45,7 +49,7 @@ export component AppWindow inherits Window {
     in-out property <bool> is_edit_mode: false;
     in-out property <bool> relationship_creation_active: false;
     in-out property <bool> relationship_type_selection_visible: false;
-    in-out property <string> relationship_creation_helper_text: "";
+    in-out property <int> relationship_creation_step: 0;
     in-out property <float> canvas_offset_x: 0;
     in-out property <float> canvas_offset_y: 0;
     in-out property <float> canvas_zoom: 1.0;
@@ -54,12 +58,16 @@ export component AppWindow inherits Window {
     callback register_clicked(string, string);
     callback tree_selected(int);
     callback person_selected(int);
-    callback relationship_selected(float, float);
+    callback relationship_selected(int);
+    callback relationship_hit_test_requested(float, float);
+    callback person_move_started(int);
     callback person_moved(int, float, float);
+    callback person_move_finished(int, float, float);
     callback add_person_requested();
     callback relationship_creation_started();
     callback relationship_creation_canceled();
     callback relationship_type_selected(string);
+    callback auto_layout_requested();
     callback inspector_edit_started();
     callback inspector_edit_canceled();
     callback inspector_edit_saved();
@@ -81,7 +89,7 @@ export component AppWindow inherits Window {
 
         email_text <=> root.login_email_text;
         password_text <=> root.login_password_text;
-        status_text <=> root.login_status_text;
+        status_code <=> root.login_status_code;
 
         login_clicked(email, password) => {
             root.login_clicked(email, password);
@@ -98,7 +106,7 @@ export component AppWindow inherits Window {
 
         email_text <=> root.register_email_text;
         password_text <=> root.register_password_text;
-        status_text <=> root.register_status_text;
+        status_code <=> root.register_status_code;
 
         register_clicked(email, password) => {
             root.register_clicked(email, password);
@@ -122,16 +130,17 @@ export component AppWindow inherits Window {
         selected_person_id: root.selected_person_id;
         selected_relationship_id: root.selected_relationship_id;
         selected_relationship_type: root.selected_relationship_type;
-        selected_relationship_from_name: root.selected_relationship_from_name;
-        selected_relationship_to_name: root.selected_relationship_to_name;
-        selected_relationship_summary: root.selected_relationship_summary;
+        selected_relationship_from_first_name: root.selected_relationship_from_first_name;
+        selected_relationship_from_middle_name: root.selected_relationship_from_middle_name;
+        selected_relationship_from_last_name: root.selected_relationship_from_last_name;
+        selected_relationship_to_first_name: root.selected_relationship_to_first_name;
+        selected_relationship_to_middle_name: root.selected_relationship_to_middle_name;
+        selected_relationship_to_last_name: root.selected_relationship_to_last_name;
         selected_person_first_name: root.selected_person_first_name;
         selected_person_middle_name: root.selected_person_middle_name;
         selected_person_last_name: root.selected_person_last_name;
-        selected_person_full_name: root.selected_person_full_name;
         selected_person_birth_date: root.selected_person_birth_date;
         selected_person_death_date: root.selected_person_death_date;
-        selected_person_dates_text: root.selected_person_dates_text;
         inspector_edit_mode: root.inspector_edit_mode;
         is_edit_mode: root.is_edit_mode;
         inspector_draft_first_name: root.inspector_draft_first_name;
@@ -141,7 +150,7 @@ export component AppWindow inherits Window {
         inspector_draft_death_date: root.inspector_draft_death_date;
         relationship_creation_active: root.relationship_creation_active;
         relationship_type_selection_visible: root.relationship_type_selection_visible;
-        relationship_creation_helper_text: root.relationship_creation_helper_text;
+        relationship_creation_step: root.relationship_creation_step;
         canvas_offset_x: root.canvas_offset_x;
         canvas_offset_y: root.canvas_offset_y;
         canvas_zoom: root.canvas_zoom;
@@ -154,12 +163,22 @@ export component AppWindow inherits Window {
             root.person_selected(person_id);
         }
 
-        relationship_selected(x, y) => {
-            root.relationship_selected(x, y);
+        relationship_selected(relationship_id) => {
+            root.relationship_selected(relationship_id);
+        }
+        relationship_hit_test_requested(x, y) => {
+            root.relationship_hit_test_requested(x, y);
+        }
+        person_move_started(person_id) => {
+            root.person_move_started(person_id);
         }
 
         person_moved(person_id, x, y) => {
             root.person_moved(person_id, x, y);
+        }
+
+        person_move_finished(person_id, x, y) => {
+            root.person_move_finished(person_id, x, y);
         }
 
         add_person_requested => {
@@ -176,6 +195,10 @@ export component AppWindow inherits Window {
 
         relationship_type_selected(value) => {
             root.relationship_type_selected(value);
+        }
+
+        auto_layout_requested => {
+            root.auto_layout_requested();
         }
 
         inspector_edit_started => {

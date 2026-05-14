@@ -1,4 +1,5 @@
 import { ScrollView } from "std-widgets.slint";
+import { Strings } from "../i18n/strings.slint";
 
 export component InspectorPanel inherits Rectangle {
     in property <int> selected_tree_id: -1;
@@ -6,16 +7,17 @@ export component InspectorPanel inherits Rectangle {
     in property <int> selected_person_id: -1;
     in property <int> selected_relationship_id: -1;
     in property <string> selected_relationship_type: "";
-    in property <string> selected_relationship_from_name: "";
-    in property <string> selected_relationship_to_name: "";
-    in property <string> selected_relationship_summary: "";
+    in property <string> selected_relationship_from_first_name: "";
+    in property <string> selected_relationship_from_middle_name: "";
+    in property <string> selected_relationship_from_last_name: "";
+    in property <string> selected_relationship_to_first_name: "";
+    in property <string> selected_relationship_to_middle_name: "";
+    in property <string> selected_relationship_to_last_name: "";
     in property <string> selected_person_first_name: "";
     in property <string> selected_person_middle_name: "";
     in property <string> selected_person_last_name: "";
-    in property <string> selected_person_full_name: "";
     in property <string> selected_person_birth_date: "";
     in property <string> selected_person_death_date: "";
-    in property <string> selected_person_dates_text: "";
     in property <bool> inspector_edit_mode: false;
     in property <bool> is_edit_mode: false;
     in property <string> inspector_draft_first_name: "";
@@ -35,6 +37,63 @@ export component InspectorPanel inherits Rectangle {
     callback inspector_draft_birth_date_edited(string);
     callback inspector_draft_death_date_edited(string);
     private property <bool> confirm_person_delete: false;
+    private property <bool> has_unsaved_changes:
+        root.inspector_edit_mode
+        && (
+            root.inspector_draft_first_name != root.selected_person_first_name
+            || root.inspector_draft_middle_name != root.selected_person_middle_name
+            || root.inspector_draft_last_name != root.selected_person_last_name
+            || root.inspector_draft_birth_date != root.selected_person_birth_date
+            || root.inspector_draft_death_date != root.selected_person_death_date
+        );
+    private property <string> selected_person_display_name:
+        root.selected_person_first_name == "" && root.selected_person_middle_name == "" && root.selected_person_last_name == ""
+            ? Strings.select_person_prompt
+            : root.selected_person_first_name
+                + (root.selected_person_middle_name != ""
+                    ? ((root.selected_person_first_name != "" ? " " : "") + root.selected_person_middle_name)
+                    : "")
+                + (root.selected_person_last_name != ""
+                    ? (((root.selected_person_first_name != "" || root.selected_person_middle_name != "") ? " " : "") + root.selected_person_last_name)
+                    : "");
+    private property <string> selected_person_dates_display:
+        root.selected_person_birth_date != "" && root.selected_person_death_date != ""
+            ? root.selected_person_birth_date + Strings.date_range_separator + root.selected_person_death_date
+        : root.selected_person_birth_date != ""
+            ? root.selected_person_birth_date
+        : root.selected_person_death_date != ""
+            ? root.selected_person_death_date
+        : "";
+    private property <string> selected_relationship_from_display_name:
+        root.selected_relationship_from_first_name
+            + (root.selected_relationship_from_middle_name != ""
+                ? ((root.selected_relationship_from_first_name != "" ? " " : "") + root.selected_relationship_from_middle_name)
+                : "")
+            + (root.selected_relationship_from_last_name != ""
+                ? (((root.selected_relationship_from_first_name != "" || root.selected_relationship_from_middle_name != "") ? " " : "") + root.selected_relationship_from_last_name)
+                : "");
+    private property <string> selected_relationship_to_display_name:
+        root.selected_relationship_to_first_name
+            + (root.selected_relationship_to_middle_name != ""
+                ? ((root.selected_relationship_to_first_name != "" ? " " : "") + root.selected_relationship_to_middle_name)
+                : "")
+            + (root.selected_relationship_to_last_name != ""
+                ? (((root.selected_relationship_to_first_name != "" || root.selected_relationship_to_middle_name != "") ? " " : "") + root.selected_relationship_to_last_name)
+                : "");
+    private property <string> selected_relationship_type_label:
+        root.selected_relationship_type == Strings.relationship_type_values[0] ? Strings.relationship_type_labels[0]
+        : root.selected_relationship_type == Strings.relationship_type_values[1] ? Strings.relationship_type_labels[1]
+        : root.selected_relationship_type == Strings.relationship_type_values[2] ? Strings.relationship_type_labels[2]
+        : root.selected_relationship_type == Strings.relationship_type_values[3] ? Strings.relationship_type_labels[3]
+        : root.selected_relationship_type;
+    private property <string> selected_relationship_summary:
+        root.selected_relationship_from_display_name == "" && root.selected_relationship_to_display_name == ""
+            ? ""
+            : root.selected_relationship_from_display_name
+                + " " + Strings.relationship_summary_separator + " "
+                + root.selected_relationship_type_label
+                + " " + Strings.relationship_summary_separator + " "
+                + root.selected_relationship_to_display_name;
 
     background: #f9f4ee;
     border-radius: 18px;
@@ -46,7 +105,7 @@ export component InspectorPanel inherits Rectangle {
         spacing: 16px;
 
         Text {
-            text: "Details";
+            text: Strings.details_title;
             font-size: 22px;
             font-weight: 600;
             color: #5b4738;
@@ -74,15 +133,34 @@ export component InspectorPanel inherits Rectangle {
                         spacing: 14px;
 
                         Text {
+                            width: parent.width;
                             text: root.selected_relationship_id >= 0
-                                ? "Relationship"
+                                ? Strings.relationship_title
                                 : root.selected_person_id >= 0
-                                    ? root.selected_person_full_name
-                                    : "Select a person";
+                                    ? root.selected_person_display_name
+                                    : Strings.select_person_prompt;
                             font-size: 18px;
                             color: #6b5645;
                             wrap: word-wrap;
                             horizontal-alignment: center;
+                        }
+
+                        if (root.has_unsaved_changes) : Rectangle {
+                            height: unsaved_changes_text.preferred-height + 20px;
+                            background: #f6ead9;
+                            border-radius: 12px;
+                            border-color: #e0c9ab;
+                            border-width: 1px;
+
+                            unsaved_changes_text := Text {
+                                x: 14px;
+                                y: 10px;
+                                width: parent.width - 28px;
+                                text: Strings.unsaved_changes;
+                                color: #8a6b4f;
+                                wrap: word-wrap;
+                                horizontal-alignment: center;
+                            }
                         }
 
                         if (root.selected_relationship_id >= 0) : VerticalLayout {
@@ -99,7 +177,7 @@ export component InspectorPanel inherits Rectangle {
                                     spacing: 6px;
 
                                     Text {
-                                        text: "Relationship";
+                                        text: Strings.relationship_title;
                                         color: #6b5645;
                                     }
 
@@ -122,12 +200,12 @@ export component InspectorPanel inherits Rectangle {
                                     spacing: 6px;
 
                                     Text {
-                                        text: "Type";
+                                        text: Strings.relationship_type_title;
                                         color: #6b5645;
                                     }
 
                                     Text {
-                                        text: root.selected_relationship_type;
+                                        text: root.selected_relationship_type_label;
                                         color: #4f3b2e;
                                         wrap: word-wrap;
                                     }
@@ -145,13 +223,13 @@ export component InspectorPanel inherits Rectangle {
                                     spacing: 6px;
 
                                     Text {
-                                        text: "Details";
+                                        text: Strings.details_title;
                                         color: #6b5645;
                                         font-weight: 600;
                                     }
 
                                     Text {
-                                        text: "Relationship editing is not available yet.";
+                                        text: Strings.relationship_edit_unavailable;
                                         color: #95806f;
                                         wrap: word-wrap;
                                     }
@@ -170,7 +248,7 @@ export component InspectorPanel inherits Rectangle {
                                     border-width: 1px;
 
                                     Text {
-                                        text: "Delete relationship";
+                                        text: Strings.delete_relationship_action;
                                         color: #6b5645;
                                         horizontal-alignment: center;
                                         vertical-alignment: center;
@@ -186,7 +264,7 @@ export component InspectorPanel inherits Rectangle {
                         if (root.selected_relationship_id < 0 && root.selected_person_id >= 0) : VerticalLayout {
                             spacing: 12px;
 
-                            if (!root.inspector_edit_mode) : VerticalLayout {
+                            if (!root.inspector_edit_mode || !root.is_edit_mode) : VerticalLayout {
                                 spacing: 12px;
 
                                 Rectangle {
@@ -200,12 +278,12 @@ export component InspectorPanel inherits Rectangle {
                                         spacing: 6px;
 
                                         Text {
-                                            text: "First name";
+                                            text: Strings.first_name_label;
                                             color: #6b5645;
                                         }
 
                                         Text {
-                                            text: root.selected_person_first_name == "" ? "Not set" : root.selected_person_first_name;
+                                            text: root.selected_person_first_name == "" ? Strings.not_set_label : root.selected_person_first_name;
                                             color: #4f3b2e;
                                             wrap: word-wrap;
                                         }
@@ -223,12 +301,12 @@ export component InspectorPanel inherits Rectangle {
                                         spacing: 6px;
 
                                         Text {
-                                            text: "Middle name";
+                                            text: Strings.middle_name_label;
                                             color: #6b5645;
                                         }
 
                                         Text {
-                                            text: root.selected_person_middle_name == "" ? "Not set" : root.selected_person_middle_name;
+                                            text: root.selected_person_middle_name == "" ? Strings.not_set_label : root.selected_person_middle_name;
                                             color: #4f3b2e;
                                             wrap: word-wrap;
                                         }
@@ -246,12 +324,12 @@ export component InspectorPanel inherits Rectangle {
                                         spacing: 6px;
 
                                         Text {
-                                            text: "Last name";
+                                            text: Strings.last_name_label;
                                             color: #6b5645;
                                         }
 
                                         Text {
-                                            text: root.selected_person_last_name == "" ? "Not set" : root.selected_person_last_name;
+                                            text: root.selected_person_last_name == "" ? Strings.not_set_label : root.selected_person_last_name;
                                             color: #4f3b2e;
                                             wrap: word-wrap;
                                         }
@@ -269,19 +347,19 @@ export component InspectorPanel inherits Rectangle {
                                         spacing: 6px;
 
                                         Text {
-                                            text: "Dates";
+                                            text: Strings.dates_label;
                                             color: #6b5645;
                                         }
 
                                         Text {
-                                            text: root.selected_person_dates_text == "" ? "No dates available" : root.selected_person_dates_text;
+                                            text: root.selected_person_dates_display == "" ? Strings.no_dates_available : root.selected_person_dates_display;
                                             color: #4f3b2e;
                                             wrap: word-wrap;
                                         }
                                     }
                                 }
 
-                                TouchArea {
+                                if (root.is_edit_mode) : TouchArea {
                                     height: 38px;
 
                                     Rectangle {
@@ -293,7 +371,7 @@ export component InspectorPanel inherits Rectangle {
                                         border-width: 1px;
 
                                         Text {
-                                            text: "Edit";
+                                            text: Strings.edit_action;
                                             color: #6b5645;
                                             horizontal-alignment: center;
                                             vertical-alignment: center;
@@ -307,17 +385,19 @@ export component InspectorPanel inherits Rectangle {
                                 }
                             }
 
-                            if (root.inspector_edit_mode) : VerticalLayout {
+                            if (root.inspector_edit_mode && root.is_edit_mode) : VerticalLayout {
                                 spacing: 12px;
 
                                 Text {
-                                    text: "Editing person";
+                                    width: parent.width;
+                                    text: Strings.editing_person_label;
                                     color: #95806f;
+                                    wrap: word-wrap;
                                     horizontal-alignment: center;
                                 }
 
                                 Text {
-                                    text: "First name";
+                                    text: Strings.first_name_label;
                                     color: #6b5645;
                                 }
 
@@ -350,14 +430,14 @@ export component InspectorPanel inherits Rectangle {
                                         y: 0px;
                                         width: parent.width - 24px;
                                         height: parent.height;
-                                        text: "First name";
+                                        text: Strings.first_name_label;
                                         color: #b69f8b;
                                         vertical-alignment: center;
                                     }
                                 }
 
                                 Text {
-                                    text: "Middle name";
+                                    text: Strings.middle_name_label;
                                     color: #6b5645;
                                 }
 
@@ -390,14 +470,14 @@ export component InspectorPanel inherits Rectangle {
                                         y: 0px;
                                         width: parent.width - 24px;
                                         height: parent.height;
-                                        text: "Optional";
+                                        text: Strings.optional_label;
                                         color: #b69f8b;
                                         vertical-alignment: center;
                                     }
                                 }
 
                                 Text {
-                                    text: "Last name";
+                                    text: Strings.last_name_label;
                                     color: #6b5645;
                                 }
 
@@ -430,14 +510,14 @@ export component InspectorPanel inherits Rectangle {
                                         y: 0px;
                                         width: parent.width - 24px;
                                         height: parent.height;
-                                        text: "Optional";
+                                        text: Strings.optional_label;
                                         color: #b69f8b;
                                         vertical-alignment: center;
                                     }
                                 }
 
                                 Text {
-                                    text: "Birth date";
+                                    text: Strings.birth_date_label;
                                     color: #6b5645;
                                 }
 
@@ -470,14 +550,14 @@ export component InspectorPanel inherits Rectangle {
                                         y: 0px;
                                         width: parent.width - 24px;
                                         height: parent.height;
-                                        text: "Optional";
+                                        text: Strings.optional_label;
                                         color: #b69f8b;
                                         vertical-alignment: center;
                                     }
                                 }
 
                                 Text {
-                                    text: "Death date";
+                                    text: Strings.death_date_label;
                                     color: #6b5645;
                                 }
 
@@ -510,7 +590,7 @@ export component InspectorPanel inherits Rectangle {
                                         y: 0px;
                                         width: parent.width - 24px;
                                         height: parent.height;
-                                        text: "Optional";
+                                        text: Strings.optional_label;
                                         color: #b69f8b;
                                         vertical-alignment: center;
                                     }
@@ -531,7 +611,7 @@ export component InspectorPanel inherits Rectangle {
                                             border-width: 1px;
 
                                             Text {
-                                                text: "Save";
+                                                text: Strings.save_action;
                                                 color: #4f3b2e;
                                                 horizontal-alignment: center;
                                                 vertical-alignment: center;
@@ -556,7 +636,7 @@ export component InspectorPanel inherits Rectangle {
                                             border-width: 1px;
 
                                             Text {
-                                                text: "Cancel";
+                                                text: Strings.cancel_action;
                                                 color: #6b5645;
                                                 horizontal-alignment: center;
                                                 vertical-alignment: center;
@@ -582,7 +662,7 @@ export component InspectorPanel inherits Rectangle {
                                         border-width: 1px;
 
                                         Text {
-                                            text: "Delete person";
+                                            text: Strings.delete_person_action;
                                             color: #6b5645;
                                             horizontal-alignment: center;
                                             vertical-alignment: center;
@@ -605,14 +685,14 @@ export component InspectorPanel inherits Rectangle {
                                         spacing: 10px;
 
                                         Text {
-                                            text: "Delete this person?";
+                                            text: Strings.confirm_delete_person_title;
                                             color: #6b5645;
                                             font-weight: 600;
                                             wrap: word-wrap;
                                         }
 
                                         Text {
-                                            text: "This will also remove all related connections.";
+                                            text: Strings.confirm_delete_person_body;
                                             color: #95806f;
                                             wrap: word-wrap;
                                         }
@@ -632,7 +712,7 @@ export component InspectorPanel inherits Rectangle {
                                                     border-width: 1px;
 
                                                     Text {
-                                                        text: "Confirm delete";
+                                                        text: Strings.confirm_delete_action;
                                                         color: #4f3b2e;
                                                         horizontal-alignment: center;
                                                         vertical-alignment: center;
@@ -657,7 +737,7 @@ export component InspectorPanel inherits Rectangle {
                                                     border-width: 1px;
 
                                                     Text {
-                                                        text: "Cancel";
+                                                        text: Strings.cancel_action;
                                                         color: #6b5645;
                                                         horizontal-alignment: center;
                                                         vertical-alignment: center;
@@ -684,13 +764,13 @@ export component InspectorPanel inherits Rectangle {
                                     spacing: 6px;
 
                                     Text {
-                                        text: "Details";
+                                        text: Strings.details_title;
                                         color: #6b5645;
                                         font-weight: 600;
                                     }
 
                                     Text {
-                                        text: "No notes or extended details are available yet.";
+                                        text: Strings.no_extended_details;
                                         color: #95806f;
                                         wrap: word-wrap;
                                     }
@@ -699,16 +779,17 @@ export component InspectorPanel inherits Rectangle {
                         }
 
                         if (root.selected_relationship_id < 0 && root.selected_person_id < 0) : Rectangle {
+                            height: empty_state_text.preferred-height + 28px;
                             background: #f7efe6;
                             border-radius: 12px;
                             border-color: #e2d4c3;
                             border-width: 1px;
 
-                            Text {
+                            empty_state_text := Text {
                                 x: 14px;
                                 y: 14px;
                                 width: parent.width - 28px;
-                                text: "Select a person to view and edit details.";
+                                text: Strings.select_person_details_prompt;
                                 color: #95806f;
                                 wrap: word-wrap;
                                 horizontal-alignment: center;

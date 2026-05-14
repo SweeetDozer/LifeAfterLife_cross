@@ -1,75 +1,345 @@
-import { LineEdit, Button } from "std-widgets.slint";
+import { Strings } from "../i18n/strings.slint";
+import { ScrollView } from "std-widgets.slint";
 import { PrimaryButton } from "../components/primary-button.slint";
 
 export component RegisterPage inherits Rectangle {
     in-out property <string> email_text: "";
     in-out property <string> password_text: "";
-    in-out property <string> status_text: "Create a new account";
+    in-out property <int> status_code: 0;
+    private property <bool> password_visible: false;
+    private property <bool> confirm_password_visible: false;
+    private property <string> confirm_password_text: "";
+    private property <string> validation_message: "";
+    private property <string> status_text:
+        root.validation_message != "" ? root.validation_message
+        : root.status_code == 1 ? Strings.auth_status_missing_fields
+        : root.status_code == 2 ? Strings.register_status_ready
+        : Strings.register_status_default;
 
     callback register_clicked(string, string);
     callback open_login();
 
-    background: transparent;
+    background: #f4ede4;
 
-    VerticalLayout {
-        padding: 24px;
-        spacing: 16px;
-
-        Text {
-            text: "LifeAfterLife";
-            font-size: 28px;
-            horizontal-alignment: center;
-        }
-
-        Text {
-            text: "Create your account";
-            font-size: 16px;
-            horizontal-alignment: center;
-        }
+    ScrollView {
+        width: parent.width;
+        height: parent.height;
 
         Rectangle {
-            height: 1px;
-            background: #444444;
-        }
+            width: parent.width;
+            height: content.preferred-height + 56px;
+            background: transparent;
 
-        VerticalLayout {
-            spacing: 10px;
+            content := VerticalLayout {
+                width: parent.width;
+                padding: 28px;
+                spacing: 0px;
+                alignment: center;
 
-            Text { text: "Email"; }
+                Rectangle {
+                    width: parent.width - 48px;
+                    height: form_content.preferred-height + 48px;
+                    background: #fffaf5;
+                    border-radius: 20px;
+                    border-color: #e6dacc;
+                    border-width: 1px;
 
-            LineEdit {
-                text <=> root.email_text;
-                placeholder-text: "example@mail.com";
+                    form_content := VerticalLayout {
+                        width: parent.width;
+                        padding: 24px;
+                        spacing: 18px;
+
+                        Rectangle {
+                            width: parent.width;
+                            height: 28px;
+                            background: transparent;
+
+                            HorizontalLayout {
+                                x: parent.width - self.width - 50px;
+                                width: 96px;
+                                height: parent.height;
+                                spacing: 8px;
+
+                                for language_code in ["en", "ru"] : TouchArea {
+                                    width: 44px;
+                                    height: 28px;
+
+                                    clicked => {
+                                        Strings.current_language = language_code;
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width;
+                                        height: parent.height;
+                                        background: Strings.current_language == language_code
+                                            ? (parent.has-hover ? #e2ccb4 : #ead8c5)
+                                            : (parent.has-hover ? #efe2d4 : #f7efe6);
+                                        border-radius: 10px;
+                                        border-width: 1px;
+                                        border-color: Strings.current_language == language_code
+                                            ? (parent.has-hover ? #b98858 : #c79f77)
+                                            : (parent.has-hover ? #ccb59c : #decfbd);
+
+                                        Text {
+                                            text: language_code == "en" ? "EN" : "RU";
+                                            color: Strings.current_language == language_code ? #4f3b2e : #6b5645;
+                                            font-size: 14px;
+                                            font-weight: 600;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Text {
+                            width: parent.width;
+                            text: Strings.app_name;
+                            font-size: 32px;
+                            font-weight: 600;
+                            color: #5b4738;
+                            horizontal-alignment: center;
+                        }
+
+                        Text {
+                            width: parent.width;
+                            text: Strings.register_title;
+                            font-size: 19px;
+                            color: #8a7665;
+                            wrap: word-wrap;
+                            horizontal-alignment: center;
+                        }
+
+                        VerticalLayout {
+                            spacing: 12px;
+
+                            Text {
+                                text: Strings.email_label;
+                                font-size: 17px;
+                                color: #6b5645;
+                            }
+
+                            Rectangle {
+                                height: 48px;
+                                background: #fffdf9;
+                                border-radius: 12px;
+                                border-color: email_input.has-focus ? #c79f77 : #d8c7b5;
+                                border-width: 1px;
+                                clip: true;
+
+                                email_input := TextInput {
+                                    x: 12px;
+                                    y: 10px;
+                                    width: parent.width - 24px;
+                                    height: parent.height - 20px;
+                                    text <=> root.email_text;
+                                    font-size: 17px;
+                                    color: #4f3b2e;
+                                    selection-background-color: #ead8c5;
+                                    selection-foreground-color: #4f3b2e;
+                                    single-line: true;
+                                    vertical-alignment: center;
+                                }
+
+                                if (root.email_text == "" && !email_input.has-focus) : Text {
+                                    x: 12px;
+                                    width: parent.width - 24px;
+                                    height: parent.height;
+                                    text: Strings.email_placeholder;
+                                    font-size: 17px;
+                                    color: #b69f8b;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            Text {
+                                text: Strings.password_label;
+                                font-size: 17px;
+                                color: #6b5645;
+                            }
+
+                            Rectangle {
+                                height: 48px;
+                                background: #fffdf9;
+                                border-radius: 12px;
+                                border-color: password_input.has-focus ? #c79f77 : #d8c7b5;
+                                border-width: 1px;
+                                clip: true;
+
+                                password_input := TextInput {
+                                    x: 12px;
+                                    y: 10px;
+                                    width: parent.width - toggle_password_button.width - 32px;
+                                    height: parent.height - 20px;
+                                    text <=> root.password_text;
+                                    font-size: 17px;
+                                    color: #4f3b2e;
+                                    selection-background-color: #ead8c5;
+                                    selection-foreground-color: #4f3b2e;
+                                    single-line: true;
+                                    vertical-alignment: center;
+                                    input-type: root.password_visible ? text : password;
+                                }
+
+                                if (root.password_text == "" && !password_input.has-focus) : Text {
+                                    x: 12px;
+                                    width: parent.width - toggle_password_button.width - 32px;
+                                    height: parent.height;
+                                    text: Strings.password_placeholder_register;
+                                    font-size: 17px;
+                                    color: #b69f8b;
+                                    vertical-alignment: center;
+                                }
+
+                                toggle_password_button := PrimaryButton {
+                                    width: self.preferred-width;
+                                    x: parent.width - self.width - 12px;
+                                    y: 6px;
+                                    height: 36px;
+                                    text: root.password_visible ? Strings.hide_password_action : Strings.show_password_action;
+
+                                    clicked => {
+                                        root.password_visible = !root.password_visible;
+                                    }
+                                }
+                            }
+
+                            Text {
+                                text: Strings.confirm_password_label;
+                                font-size: 17px;
+                                color: #6b5645;
+                            }
+
+                            Rectangle {
+                                height: 48px;
+                                background: #fffdf9;
+                                border-radius: 12px;
+                                border-color: confirm_password_input.has-focus ? #c79f77 : #d8c7b5;
+                                border-width: 1px;
+                                clip: true;
+
+                                confirm_password_input := TextInput {
+                                    x: 12px;
+                                    y: 10px;
+                                    width: parent.width - confirm_toggle_password_button.width - 32px;
+                                    height: parent.height - 20px;
+                                    text <=> root.confirm_password_text;
+                                    font-size: 17px;
+                                    color: #4f3b2e;
+                                    selection-background-color: #ead8c5;
+                                    selection-foreground-color: #4f3b2e;
+                                    single-line: true;
+                                    vertical-alignment: center;
+                                    input-type: root.confirm_password_visible ? text : password;
+                                }
+
+                                if (root.confirm_password_text == "" && !confirm_password_input.has-focus) : Text {
+                                    x: 12px;
+                                    width: parent.width - confirm_toggle_password_button.width - 32px;
+                                    height: parent.height;
+                                    text: Strings.confirm_password_placeholder;
+                                    font-size: 17px;
+                                    color: #b69f8b;
+                                    vertical-alignment: center;
+                                }
+
+                                confirm_toggle_password_button := PrimaryButton {
+                                    width: self.preferred-width;
+                                    x: parent.width - self.width - 12px;
+                                    y: 6px;
+                                    height: 36px;
+                                    text: root.confirm_password_visible ? Strings.hide_password_action : Strings.show_password_action;
+
+                                    clicked => {
+                                        root.confirm_password_visible = !root.confirm_password_visible;
+                                    }
+                                }
+                            }
+
+                            Text {
+                                width: parent.width;
+                                text: Strings.register_account_reminder;
+                                font-size: 15px;
+                                wrap: word-wrap;
+                                color: #8a7665;
+                            }
+                        }
+
+                        TouchArea {
+                            height: 42px;
+
+                            clicked => {
+                                if (root.email_text == "") {
+                                    root.validation_message = Strings.register_error_email_required;
+                                } else if (root.password_text == "") {
+                                    root.validation_message = Strings.register_error_password_required;
+                                } else if (root.confirm_password_text == "") {
+                                    root.validation_message = Strings.register_error_confirm_password_required;
+                                } else if (root.password_text != root.confirm_password_text) {
+                                    root.validation_message = Strings.register_error_passwords_do_not_match;
+                                } else {
+                                    root.validation_message = "";
+                                    root.register_clicked(root.email_text, root.password_text);
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width;
+                                height: parent.height;
+                                background: parent.has-hover ? #efe2d4 : #f7efe6;
+                                border-radius: 12px;
+                                border-width: 1px;
+                                border-color: parent.has-hover ? #ccb59c : #decfbd;
+
+                                Text {
+                                    text: Strings.register_action;
+                                    font-size: 17px;
+                                    color: #6b5645;
+                                    font-weight: 600;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        TouchArea {
+                            height: 38px;
+
+                            clicked => {
+                                root.open_login();
+                            }
+
+                            Rectangle {
+                                width: parent.width;
+                                height: parent.height;
+                                background: parent.has-hover ? #f3e7da : #fffaf5;
+                                border-radius: 12px;
+                                border-width: 1px;
+                                border-color: parent.has-hover ? #d4c0ab : #e6dacc;
+
+                                Text {
+                                    text: Strings.back_to_login_action;
+                                    font-size: 17px;
+                                    color: #6b5645;
+                                    font-weight: 600;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        Text {
+                            width: parent.width;
+                            text: root.status_text;
+                            font-size: 16px;
+                            wrap: word-wrap;
+                            color: #8a7665;
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
             }
-
-            Text { text: "Password"; }
-
-            LineEdit {
-                text <=> root.password_text;
-                placeholder-text: "Create password";
-                input-type: password;
-            }
-        }
-
-        PrimaryButton {
-            text: "Register";
-            clicked => {
-                root.register_clicked(root.email_text, root.password_text);
-            }
-        }
-
-        Button {
-            text: "Back to login";
-            clicked => {
-                root.open_login();
-            }
-        }
-
-        Text {
-            text: root.status_text;
-            wrap: word-wrap;
-            color: #cccccc;
-            horizontal-alignment: center;
         }
     }
 }

@@ -1,73 +1,242 @@
-import { PrimaryButton } from "./primary-button.slint";
+import { Strings } from "../i18n/strings.slint";
 
 export component TreesRail inherits Rectangle {
     in property <[string]> tree_names: [];
     in property <[int]> tree_ids: [];
     in property <int> selected_tree_id: -1;
+    in property <bool> collapsed: false;
+    in property <bool> settings_view: false;
 
     callback tree_selected(int);
+    callback toggle_collapsed();
+    callback open_settings();
+    callback close_settings();
 
-    background: #f7f1ea;
-    border-radius: 18px;
-    border-color: #e6dacc;
-    border-width: 1px;
+    private property <length> collapsed_handle_height: 120px;
 
-    VerticalLayout {
-        padding: 20px;
-        spacing: 16px;
+    background: root.collapsed ? transparent : #f7f1ea;
+    border-radius: root.collapsed ? 0px : 18px;
+    border-color: root.collapsed ? transparent : #e6dacc;
+    border-width: root.collapsed ? 0px : 1px;
 
-        Text {
-            text: "Trees";
-            font-size: 22px;
-            font-weight: 600;
-            color: #5b4738;
-        }
+    if (root.collapsed) : TouchArea {
+        x: 0px;
+        y: parent.height / 2 - root.collapsed_handle_height / 2;
+        width: parent.width;
+        height: root.collapsed_handle_height;
 
-        Text {
-            text: root.tree_names.length > 0 ? "Choose a tree to open its workspace." : "Your trees will appear here.";
-            wrap: word-wrap;
-            color: #8a7665;
+        clicked => {
+            root.toggle_collapsed();
         }
 
         Rectangle {
-            vertical-stretch: 1;
-            background: #fffaf5;
-            border-radius: 14px;
-            border-color: #eadfce;
+            width: parent.width;
+            height: parent.height;
+            background: parent.has-hover ? #e5ccb0 : #ead8c5;
+            border-radius: 12px;
             border-width: 1px;
+            border-color: parent.has-hover ? #b98858 : #c79f77;
 
-            VerticalLayout {
-                padding: 12px;
-                spacing: 10px;
+            Text {
+                text: ">";
+                color: #5b4738;
+                font-size: 16px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
 
-                for tree_name[index] in root.tree_names : TouchArea {
-                    height: 42px;
+    if (!root.collapsed) : VerticalLayout {
+        padding: 18px;
+        spacing: 14px;
 
-                    clicked => {
-                        root.tree_selected(root.tree_ids[index]);
+        Rectangle {
+            height: 32px;
+            background: transparent;
+
+            Text {
+                x: 0px;
+                y: 2px;
+                width: parent.width - 84px;
+                text: root.settings_view ? Strings.settings_title : Strings.trees_title;
+                font-size: 22px;
+                font-weight: 600;
+                color: #5b4738;
+            }
+
+            TouchArea {
+                x: parent.width - 72px;
+                y: 0px;
+                width: 32px;
+                height: 32px;
+
+                clicked => {
+                    if (root.settings_view) {
+                        root.close_settings();
+                    } else {
+                        root.open_settings();
                     }
+                }
 
-                    Rectangle {
-                        width: parent.width;
-                        height: parent.height;
-                        background: root.selected_tree_id == root.tree_ids[index] ? #ead8c5 : #f3e7da;
-                        border-radius: 12px;
-                        border-width: root.selected_tree_id == root.tree_ids[index] ? 1px : 0px;
-                        border-color: #d5b898;
+                Rectangle {
+                    width: parent.width;
+                    height: parent.height;
+                    background: parent.has-hover ? #efe3d6 : #f7efe6;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: parent.has-hover ? #ccb59c : #decfbd;
 
-                        Text {
-                            x: 12px;
-                            y: 12px;
-                            text: tree_name;
-                            color: root.selected_tree_id == root.tree_ids[index] ? #4f3b2e : #6b5645;
-                        }
+                    Text {
+                        text: root.settings_view ? "<" : "⚙";
+                        color: #6b5645;
+                        font-size: root.settings_view ? 16px : 18px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            TouchArea {
+                x: parent.width - 32px;
+                y: 0px;
+                width: 32px;
+                height: 32px;
+
+                clicked => {
+                    root.toggle_collapsed();
+                }
+
+                Rectangle {
+                    width: parent.width;
+                    height: parent.height;
+                    background: parent.has-hover ? #efe3d6 : #f7efe6;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: parent.has-hover ? #ccb59c : #decfbd;
+
+                    Text {
+                        text: "<";
+                        color: #6b5645;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
                     }
                 }
             }
         }
 
-        PrimaryButton {
-            text: "+ New Tree";
+        if (!root.settings_view) : Text {
+            width: parent.width;
+            text: root.tree_names.length > 0 ? Strings.trees_hint_with_items : Strings.trees_hint_empty;
+            wrap: word-wrap;
+            color: #8a7665;
+        }
+
+        if (!root.settings_view) : VerticalLayout {
+            vertical-stretch: 1;
+            spacing: 10px;
+
+            for tree_name[index] in root.tree_names : TouchArea {
+                height: 44px;
+
+                clicked => {
+                    root.tree_selected(root.tree_ids[index]);
+                }
+
+                Rectangle {
+                    width: parent.width;
+                    height: parent.height;
+                    background: root.selected_tree_id == root.tree_ids[index] ? (parent.has-hover ? #e4ceb8 : #ead8c5) : (parent.has-hover ? #ede0d2 : #f3e7da);
+                    border-radius: 12px;
+                    border-width: root.selected_tree_id == root.tree_ids[index] ? 1px : 0px;
+                    border-color: #d5b898;
+
+                    Text {
+                        width: parent.width;
+                        height: parent.height;
+                        text: tree_name;
+                        color: root.selected_tree_id == root.tree_ids[index] ? #4f3b2e : #6b5645;
+                        font-size: 15px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+
+        if (!root.settings_view) : TouchArea {
+            height: 46px;
+
+            Rectangle {
+                width: parent.width;
+                height: parent.height;
+                background: parent.has-hover ? #dfc19d : #e8d0b4;
+                border-radius: 14px;
+                border-width: 1px;
+                border-color: parent.has-hover ? #a87441 : #b98858;
+
+                Text {
+                    width: parent.width;
+                    height: parent.height;
+                    text: Strings.add_tree_action;
+                    color: #4f3b2e;
+                    font-size: 15px;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        if (root.settings_view) : VerticalLayout {
+            vertical-stretch: 1;
+            spacing: 12px;
+
+            Text {
+                width: parent.width;
+                text: Strings.language_setting_title;
+                color: #6b5645;
+                font-size: 16px;
+                font-weight: 600;
+                wrap: word-wrap;
+            }
+
+            for language[index] in ["en", "ru"] : TouchArea {
+                height: 42px;
+
+                clicked => {
+                    Strings.current_language = language;
+                }
+
+                Rectangle {
+                    width: parent.width;
+                    height: parent.height;
+                    background: Strings.current_language == language
+                        ? (parent.has-hover ? #e2ccb4 : #ead8c5)
+                        : (parent.has-hover ? #efe2d4 : #f7efe6);
+                    border-radius: 12px;
+                    border-width: 1px;
+                    border-color: Strings.current_language == language
+                        ? (parent.has-hover ? #b98858 : #c79f77)
+                        : (parent.has-hover ? #ccb59c : #decfbd);
+
+                    Text {
+                        width: parent.width;
+                        height: parent.height;
+                        text: index == 0 ? Strings.language_english_label : Strings.language_russian_label;
+                        color: Strings.current_language == language ? #4f3b2e : #6b5645;
+                        font-size: 15px;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                background: transparent;
+            }
         }
     }
 }
