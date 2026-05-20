@@ -9,6 +9,7 @@ void sync_selected_person_details(const AppWindow &app, const Person &person)
     app.set_selected_person_last_name(slint::SharedString(person.last_name));
     app.set_selected_person_birth_date(slint::SharedString(person.birth_date));
     app.set_selected_person_death_date(slint::SharedString(person.death_date));
+    app.set_selected_person_description(slint::SharedString(person.description));
 }
 
 void sync_inspector_draft(const AppWindow &app, const Person *person)
@@ -19,6 +20,7 @@ void sync_inspector_draft(const AppWindow &app, const Person *person)
         app.set_inspector_draft_last_name(slint::SharedString());
         app.set_inspector_draft_birth_date(slint::SharedString());
         app.set_inspector_draft_death_date(slint::SharedString());
+        app.set_inspector_draft_description(slint::SharedString());
         return;
     }
 
@@ -27,6 +29,7 @@ void sync_inspector_draft(const AppWindow &app, const Person *person)
     app.set_inspector_draft_last_name(slint::SharedString(person->last_name));
     app.set_inspector_draft_birth_date(slint::SharedString(person->birth_date));
     app.set_inspector_draft_death_date(slint::SharedString(person->death_date));
+    app.set_inspector_draft_description(slint::SharedString(person->description));
 }
 
 void sync_selected_person(const AppWindow &app, const std::vector<Person> &persons, int selected_person_id)
@@ -45,6 +48,7 @@ void sync_selected_person(const AppWindow &app, const std::vector<Person> &perso
     app.set_selected_person_last_name(slint::SharedString());
     app.set_selected_person_birth_date(slint::SharedString());
     app.set_selected_person_death_date(slint::SharedString());
+    app.set_selected_person_description(slint::SharedString());
 }
 
 void clear_selected_person(const AppWindow &app, bool clear_draft)
@@ -55,6 +59,7 @@ void clear_selected_person(const AppWindow &app, bool clear_draft)
     app.set_selected_person_last_name(slint::SharedString());
     app.set_selected_person_birth_date(slint::SharedString());
     app.set_selected_person_death_date(slint::SharedString());
+    app.set_selected_person_description(slint::SharedString());
     if (clear_draft) {
         sync_inspector_draft(app, nullptr);
     }

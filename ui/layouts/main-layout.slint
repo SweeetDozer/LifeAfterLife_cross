@@ -7,6 +7,7 @@ export component MainLayout inherits Rectangle {
     in property <[int]> tree_ids: [];
     in property <int> selected_tree_id: -1;
     in property <string> selected_tree_name: "";
+    in-out property <string> tree_rename_name: "";
     in property <[PersonNode]> persons: [];
     in property <[RelationshipLine]> relationship_lines: [];
     in property <int> selected_person_id: -1;
@@ -23,21 +24,28 @@ export component MainLayout inherits Rectangle {
     in property <string> selected_person_last_name: "";
     in property <string> selected_person_birth_date: "";
     in property <string> selected_person_death_date: "";
+    in property <string> selected_person_description: "";
     in property <bool> inspector_edit_mode: false;
     in property <string> inspector_draft_first_name: "";
     in property <string> inspector_draft_middle_name: "";
     in property <string> inspector_draft_last_name: "";
     in property <string> inspector_draft_birth_date: "";
     in property <string> inspector_draft_death_date: "";
+    in property <string> inspector_draft_description: "";
     in property <bool> is_edit_mode: false;
     in property <bool> relationship_creation_active: false;
     in property <bool> relationship_type_selection_visible: false;
     in property <int> relationship_creation_step: 0;
+    in property <string> relationship_error_message: "";
     in property <float> canvas_offset_x: 0;
     in property <float> canvas_offset_y: 0;
     in property <float> canvas_zoom: 1.0;
 
     callback tree_selected(int);
+    callback add_tree_requested();
+    callback tree_rename_name_edited(string);
+    callback rename_tree_requested();
+    callback delete_tree_requested();
     callback person_selected(int);
     callback relationship_selected(int);
     callback relationship_hit_test_requested(float, float);
@@ -59,10 +67,12 @@ export component MainLayout inherits Rectangle {
     callback inspector_draft_last_name_edited(string);
     callback inspector_draft_birth_date_edited(string);
     callback inspector_draft_death_date_edited(string);
+    callback inspector_draft_description_edited(string);
     callback toggle_edit_mode();
     callback canvas_selection_cleared();
     callback canvas_panned(float, float);
     callback canvas_zoom_changed(float);
+    callback logout_requested();
 
     private property <bool> trees_collapsed: true;
     private property <length> trees_expanded_width: 220px;
@@ -76,10 +86,20 @@ export component MainLayout inherits Rectangle {
     background: #f4ede4;
 
     changed selected_person_id => {
-        if (root.selected_person_id >= 0) {
+        if (root.selected_person_id >= 0 && !root.relationship_creation_active) {
             root.details_open = true;
         } else if (root.selected_relationship_id < 0) {
             root.details_open = false;
+        }
+    }
+
+    changed relationship_creation_active => {
+        if (root.relationship_creation_active) {
+            if (root.selected_person_id >= 0) {
+                root.details_open = false;
+            }
+        } else if (root.selected_person_id >= 0) {
+            root.details_open = true;
         }
     }
 
@@ -91,9 +111,35 @@ export component MainLayout inherits Rectangle {
         }
     }
 
-    HorizontalLayout {
-        padding: 20px;
-        spacing: 18px;
+    if (root.relationship_error_message != "") : Rectangle {
+        width: 320px;
+        height: 56px;
+        x: parent.width - 340px;
+        y: 20px;
+        background: #352b2c;
+        border-color: #7f5f63;
+        border-width: 1px;
+        border-radius: 16px;
+        z: 100;
+
+        Text {
+            x: 16px;
+            y: 14px;
+            width: parent.width - 32px;
+            text: root.relationship_error_message;
+            color: #f4dada;
+            wrap: word-wrap;
+            vertical-alignment: top;
+        }
+    }
+
+    VerticalLayout {
+        width: parent.width;
+        spacing: 12px;
+
+        HorizontalLayout {
+            padding: 20px;
+            spacing: 18px;
 
         TreesRail {
             min-width: root.trees_collapsed ? root.trees_collapsed_width : root.trees_expanded_width;
@@ -103,11 +149,25 @@ export component MainLayout inherits Rectangle {
             tree_names: root.tree_names;
             tree_ids: root.tree_ids;
             selected_tree_id: root.selected_tree_id;
+            selected_tree_name: root.selected_tree_name;
+            tree_rename_name: root.tree_rename_name;
             collapsed: root.trees_collapsed;
             settings_view: root.sidebar_settings_open;
 
             tree_selected(index) => {
                 root.tree_selected(index);
+            }
+            add_tree_requested => {
+                root.add_tree_requested();
+            }
+            tree_rename_name_edited(value) => {
+                root.tree_rename_name_edited(value);
+            }
+            rename_tree_requested => {
+                root.rename_tree_requested();
+            }
+            delete_tree_requested => {
+                root.delete_tree_requested();
             }
             toggle_collapsed => {
                 root.trees_collapsed = !root.trees_collapsed;
@@ -117,6 +177,9 @@ export component MainLayout inherits Rectangle {
             }
             close_settings => {
                 root.sidebar_settings_open = false;
+            }
+            logout_requested => {
+                root.logout_requested();
             }
         }
 
@@ -183,6 +246,7 @@ export component MainLayout inherits Rectangle {
             }
         }
     }
+}
 
     Rectangle {
         x: root.width - (root.details_open ? root.details_drawer_width : root.details_handle_width) - 20px;
@@ -275,6 +339,7 @@ export component MainLayout inherits Rectangle {
                 selected_person_last_name: root.selected_person_last_name;
                 selected_person_birth_date: root.selected_person_birth_date;
                 selected_person_death_date: root.selected_person_death_date;
+                selected_person_description: root.selected_person_description;
                 inspector_edit_mode: root.inspector_edit_mode;
                 is_edit_mode: root.is_edit_mode;
                 inspector_draft_first_name: root.inspector_draft_first_name;
@@ -282,6 +347,7 @@ export component MainLayout inherits Rectangle {
                 inspector_draft_last_name: root.inspector_draft_last_name;
                 inspector_draft_birth_date: root.inspector_draft_birth_date;
                 inspector_draft_death_date: root.inspector_draft_death_date;
+                inspector_draft_description: root.inspector_draft_description;
 
                 inspector_edit_started => {
                     root.inspector_edit_started();
@@ -312,6 +378,9 @@ export component MainLayout inherits Rectangle {
                 }
                 inspector_draft_death_date_edited(value) => {
                     root.inspector_draft_death_date_edited(value);
+                }
+                inspector_draft_description_edited(value) => {
+                    root.inspector_draft_description_edited(value);
                 }
             }
         }

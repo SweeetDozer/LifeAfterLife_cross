@@ -6,9 +6,11 @@ export component LoginPage inherits Rectangle {
     in-out property <string> email_text: "";
     in-out property <string> password_text: "";
     in-out property <int> status_code: 0;
+    in-out property <string> status_message: "";
     private property <bool> password_visible: false;
     private property <string> status_text:
-        root.status_code == 1 ? Strings.auth_status_missing_fields
+        root.status_message != "" ? root.status_message
+        : root.status_code == 1 ? Strings.auth_status_missing_fields
         : root.status_code == 2 ? Strings.login_status_ready
         : Strings.login_status_default;
 

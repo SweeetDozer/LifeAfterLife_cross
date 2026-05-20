@@ -1,13 +1,20 @@
 #include "app-window.h"
+#include "api/api_client.h"
+#include "api/auth_api.h"
+#include "api/tree_api.h"
 #include "app/app_state.h"
 #include "models/person.h"
 #include "models/relationship.h"
+#include "storage/persistence.h"
 #include "ui_sync/sync.h"
 #include "utils/formatters.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <chrono>
+#include <functional>
+#include <filesystem>
 #include <map>
 #include <string>
 #include <iostream>
@@ -52,6 +59,256 @@ std::string to_std_string(const slint::SharedString &value)
 std::string format_person_name(const Person &person)
 {
     return format_person_name_parts(person.first_name, person.middle_name, person.last_name);
+}
+
+std::string to_lower_copy(std::string value)
+{
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return value;
+}
+
+std::string login_error_message_from_result(const api::ApiError &error)
+{
+    if (error.type == api::ApiErrorType::Network) {
+        return "Could not reach the server. Check your connection.";
+    }
+
+    if (error.http_status == 401 || error.http_status == 403) {
+        return "Invalid email or password.";
+    }
+
+    return "Could not complete the request. Please try again.";
+}
+
+std::string register_error_message_from_result(const api::ApiError &error)
+{
+    if (error.type == api::ApiErrorType::Network) {
+        return "Could not reach the server. Check your connection.";
+    }
+
+    const std::string lowered = to_lower_copy(error.message);
+    if (error.http_status == 409
+        || lowered.find("already") != std::string::npos
+        || lowered.find("exists") != std::string::npos) {
+        return "An account with this email already exists.";
+    }
+
+    return "Could not complete the request. Please try again.";
+}
+
+bool has_persisted_session(const storage::SessionData &session)
+{
+    return !session.access_token.empty() && !session.refresh_token.empty();
+}
+
+bool tree_exists(const std::vector<Tree> &trees, int tree_id)
+{
+    return std::any_of(trees.begin(), trees.end(), [tree_id](const Tree &tree) {
+        return tree.id == tree_id;
+    });
+}
+
+Tree tree_from_summary(const api::TreeSummary &summary)
+{
+    return Tree {
+        .id = summary.id,
+        .name = summary.name,
+    };
+}
+
+std::vector<Tree> trees_from_summaries(const std::vector<api::TreeSummary> &summaries)
+{
+    std::vector<Tree> trees;
+    trees.reserve(summaries.size());
+    for (const auto &summary : summaries) {
+        trees.push_back(tree_from_summary(summary));
+    }
+    return trees;
+}
+
+std::string tree_error_message_from_result(const api::ApiError &error)
+{
+    if (error.type == api::ApiErrorType::Network) {
+        return "Could not reach the server.";
+    }
+
+    if (error.http_status == 404) {
+        return "Requested tree was not found.";
+    }
+
+    return error.message.empty() ? "Could not load tree data." : error.message;
+}
+
+std::string graph_mutation_error_message_from_result(const api::ApiError &error)
+{
+    if (error.type == api::ApiErrorType::Network) {
+        return "Could not reach the server.";
+    }
+
+    if (error.http_status == 404) {
+        return "The item no longer exists on the server.";
+    }
+
+    if (error.http_status == 422) {
+        if (!error.message.empty()) {
+            if (auto parsed = api::parse_json(error.message)) {
+                if (const auto *object = api::as_object(&*parsed)) {
+                    if (auto detail = api::json_get_string(object, "detail"); detail) {
+                        if (*detail == "Parent relationship cannot point in both directions") {
+                            return "Parent relationship must be created from parent to child, not the other way around.";
+                        }
+                        return *detail;
+                    }
+                }
+            }
+            return error.message;
+        }
+        return "The server rejected the graph change.";
+    }
+
+    return error.message.empty() ? "Could not save graph changes." : error.message;
+}
+
+std::pair<float, float> default_person_position_for_index(size_t index)
+{
+    constexpr size_t kDefaultColumns = 3;
+    const size_t column = index % kDefaultColumns;
+    const size_t row = index / kDefaultColumns;
+    return {
+        kAutoLayoutOriginX + static_cast<float>(column) * kAutoLayoutHorizontalSpacing,
+        kAutoLayoutOriginY + static_cast<float>(row) * kAutoLayoutVerticalSpacing,
+    };
+}
+
+Person person_from_record(const api::PersonRecord &record, size_t index)
+{
+    const auto [default_x, default_y] = default_person_position_for_index(index);
+    return Person {
+        .id = record.id,
+        .first_name = record.first_name,
+        .middle_name = record.middle_name,
+        .last_name = record.last_name,
+        .birth_date = record.birth_date,
+        .death_date = record.death_date,
+        .description = record.description,
+        .x = default_x,
+        .y = default_y,
+    };
+}
+
+std::vector<Person> persons_from_records(const std::vector<api::PersonRecord> &records)
+{
+    std::vector<Person> persons;
+    persons.reserve(records.size());
+    for (size_t index = 0; index < records.size(); ++index) {
+        persons.push_back(person_from_record(records[index], index));
+    }
+    return persons;
+}
+
+std::optional<std::string> optional_string_from_maybe_empty(const std::string &value)
+{
+    return value.empty() ? std::nullopt : std::optional<std::string>(value);
+}
+
+api::PersonMutationData person_mutation_data_from_person(const Person &person)
+{
+    return api::PersonMutationData {
+        .first_name = person.first_name.empty() ? std::optional<std::optional<std::string>>() : std::optional<std::optional<std::string>>(person.first_name),
+        .middle_name = person.middle_name.empty() ? std::optional<std::optional<std::string>>() : std::optional<std::optional<std::string>>(person.middle_name),
+        .last_name = person.last_name.empty() ? std::optional<std::optional<std::string>>() : std::optional<std::optional<std::string>>(person.last_name),
+        .birth_date = person.birth_date.empty() ? std::optional<std::optional<std::string>>() : std::optional<std::optional<std::string>>(person.birth_date),
+        .death_date = person.death_date.empty() ? std::optional<std::optional<std::string>>() : std::optional<std::optional<std::string>>(person.death_date),
+    };
+}
+
+api::PersonMutationData person_update_data_from_changes(const Person &previous_person, const Person &updated_person)
+{
+    api::PersonMutationData data;
+    if (previous_person.first_name != updated_person.first_name) {
+        if (updated_person.first_name.empty()) {
+            data.first_name = std::optional<std::optional<std::string>>(std::optional<std::string>());
+        } else {
+            data.first_name = updated_person.first_name;
+        }
+    }
+    if (previous_person.middle_name != updated_person.middle_name) {
+        if (updated_person.middle_name.empty()) {
+            data.middle_name = std::optional<std::optional<std::string>>(std::optional<std::string>());
+        } else {
+            data.middle_name = updated_person.middle_name;
+        }
+    }
+    if (previous_person.last_name != updated_person.last_name) {
+        if (updated_person.last_name.empty()) {
+            data.last_name = std::optional<std::optional<std::string>>(std::optional<std::string>());
+        } else {
+            data.last_name = updated_person.last_name;
+        }
+    }
+    if (previous_person.birth_date != updated_person.birth_date) {
+        if (updated_person.birth_date.empty()) {
+            data.birth_date = std::optional<std::optional<std::string>>(std::optional<std::string>());
+        } else {
+            data.birth_date = updated_person.birth_date;
+        }
+    }
+    if (previous_person.death_date != updated_person.death_date) {
+        if (updated_person.death_date.empty()) {
+            data.death_date = std::optional<std::optional<std::string>>(std::optional<std::string>());
+        } else {
+            data.death_date = updated_person.death_date;
+        }
+    }
+    if (previous_person.description != updated_person.description) {
+        if (updated_person.description.empty()) {
+            data.description = std::optional<std::optional<std::string>>(std::optional<std::string>());
+        } else {
+            data.description = updated_person.description;
+        }
+    }
+    return data;
+}
+
+storage::TreeLayoutData make_canvas_only_tree_layout(const AppState &app_state)
+{
+    storage::TreeLayoutData layout;
+    layout.canvas.zoom = app_state.canvas_zoom;
+    layout.canvas.offset_x = app_state.canvas_offset_x;
+    layout.canvas.offset_y = app_state.canvas_offset_y;
+    return layout;
+}
+
+storage::TreeLayoutData make_full_tree_layout(const AppState &app_state, const std::vector<Person> &persons, const std::vector<Relationship> &relationships)
+{
+    storage::TreeLayoutData layout = make_canvas_only_tree_layout(app_state);
+    for (const auto &person : persons) {
+        layout.persons[person.id] = storage::PersonLayoutPosition {
+            .x = person.x,
+            .y = person.y,
+        };
+    }
+
+    for (const auto &rel : relationships) {
+        layout.relationships.push_back(rel);
+    }
+
+    return layout;
+}
+
+void apply_saved_person_positions(std::vector<Person> &persons, const storage::TreeLayoutData &tree_layout)
+{
+    for (auto &person : persons) {
+        const auto position_it = tree_layout.persons.find(person.id);
+        if (position_it == tree_layout.persons.end()) {
+            continue;
+        }
+
+        person.x = static_cast<float>(position_it->second.x);
+        person.y = static_cast<float>(position_it->second.y);
+    }
 }
 
 float clamp_canvas_zoom(float zoom)
@@ -117,9 +374,17 @@ bool relationship_exists(const std::vector<Relationship> &relationships,
             return true;
         }
 
-        return relationship_type_is_symmetric(relationship_type)
-            && relationship.from_person_id == to_person_id
-            && relationship.to_person_id == from_person_id;
+        if (relationship_type_is_symmetric(relationship_type)) {
+            return relationship.from_person_id == to_person_id
+                && relationship.to_person_id == from_person_id;
+        }
+
+        if (relationship.relationship_type == RelationshipType::Parent) {
+            return relationship.from_person_id == to_person_id
+                && relationship.to_person_id == from_person_id;
+        }
+
+        return false;
     });
 }
 
@@ -128,29 +393,29 @@ std::vector<Person> make_mock_persons(int tree_id)
     switch (tree_id) {
     case 1:
         return {
-            { 110, "Ava", "Claire", "Stone", "1988", "", 120.f, 130.f },
-            { 111, "Liam", "", "Brooks", "1986", "", 340.f, 150.f },
-            { 112, "Mia", "", "Chen", "1990", "", 230.f, 320.f }
+            { 110, "Ava", "Claire", "Stone", "1988", "", "", 120.f, 130.f },
+            { 111, "Liam", "", "Brooks", "1986", "", "", 340.f, 150.f },
+            { 112, "Mia", "", "Chen", "1990", "", "", 230.f, 320.f }
         };
     case 2:
         return {
-            { 210, "Nora", "", "Fields", "1978", "", 140.f, 120.f },
-            { 211, "Ethan", "", "Cole", "1981", "", 360.f, 140.f },
-            { 212, "June", "", "Patel", "1992", "", 250.f, 300.f },
-            { 213, "Iris", "", "Young", "1994", "", 500.f, 260.f }
+            { 210, "Nora", "", "Fields", "1978", "", "", 140.f, 120.f },
+            { 211, "Ethan", "", "Cole", "1981", "", "", 360.f, 140.f },
+            { 212, "June", "", "Patel", "1992", "", "", 250.f, 300.f },
+            { 213, "Iris", "", "Young", "1994", "", "", 500.f, 260.f }
         };
     case 3:
         return {
-            { 310, "Helen", "", "Reed", "1928", "2004", 150.f, 120.f },
-            { 311, "Robert", "", "Reed", "1925", "1998", 360.f, 120.f },
-            { 312, "Anna", "", "Reed", "1954", "2016", 255.f, 290.f }
+            { 310, "Helen", "", "Reed", "1928", "2004", "", 150.f, 120.f },
+            { 311, "Robert", "", "Reed", "1925", "1998", "", 360.f, 120.f },
+            { 312, "Anna", "", "Reed", "1954", "2016", "", 255.f, 290.f }
         };
     default:
         return {
-            { 10, "Elena", "", "Hart", "1946", "2019", 130.f, 110.f },
-            { 11, "David", "Alexander", "Hart", "1943", "2015", 360.f, 110.f },
-            { 12, "Maya", "", "Hart", "1971", "", 120.f, 300.f },
-            { 13, "Jonah", "", "Hart", "1974", "", 360.f, 300.f }
+            { 10, "Elena", "", "Hart", "1946", "2019", "", 130.f, 110.f },
+            { 11, "David", "Alexander", "Hart", "1943", "2015", "", 360.f, 110.f },
+            { 12, "Maya", "", "Hart", "1971", "", "", 120.f, 300.f },
+            { 13, "Jonah", "", "Hart", "1974", "", "", 360.f, 300.f }
         };
     }
 }
@@ -620,124 +885,381 @@ int main()
 {
     auto app = AppWindow::create();
     AppState app_state {};
-    const std::vector<Tree> trees = {
-        { 0, "Family" },
-        { 1, "Friends" },
-        { 2, "Work" },
-        { 3, "Archive" }
-    };
-    app_state.selected_tree_id = trees.empty() ? -1 : trees.front().id;
+    const storage::SessionData restored_session = storage::load_session();
+    const storage::UiStateData restored_ui_state = storage::load_ui_state();
+    api::ApiClient api_client;
+    api::AuthApi auth_api(api_client);
+    api::TreeApi tree_api(api_client);
+    api_client.set_access_token(restored_session.access_token);
+    std::vector<Tree> trees;
+    app_state.selected_tree_id = -1;
     std::map<int, std::vector<Person>> persons_by_tree;
     std::map<int, std::vector<Relationship>> relationships_by_tree;
     std::map<int, std::pair<float, float>> drag_start_positions;
+    slint::Timer layout_save_timer;
     int next_person_id = 1;
     int next_relationship_id = 1;
+    int next_temporary_person_id = -1;
+    int next_temporary_relationship_id = -1;
+    RelationshipCreationStep relationship_creation_step = RelationshipCreationStep::Inactive;
+    int relationship_first_person_id = -1;
+    int relationship_second_person_id = -1;
+    auto persons_model = make_person_model({});
+    std::vector<RelationshipLine> relationship_line_cache;
+    auto relationship_lines_model = make_relationship_line_model(relationship_line_cache);
+    slint::Timer relationship_error_timer;
+    std::string tree_rename_name;
 
-    for (const auto &tree : trees) {
-        auto tree_persons = make_mock_persons(tree.id);
-        auto tree_relationships = make_mock_relationships(tree.id);
+    const std::vector<Person> empty_persons;
+    bool relationship_load_notice_logged = false;
 
+    const std::function<void()> schedule_tree_layout_save = [&, app_weak = slint::ComponentWeakHandle<AppWindow>(app)]() {
+        if (app_state.selected_tree_id < 0) {
+            return;
+        }
+
+        layout_save_timer.start(
+            slint::TimerMode::SingleShot,
+            std::chrono::milliseconds(450),
+            [&, app_weak]() {
+                if (!app_weak.lock()) {
+                    return;
+                }
+
+                const auto persons_it = persons_by_tree.find(app_state.selected_tree_id);
+                if (persons_it == persons_by_tree.end()) {
+                    return;
+                }
+
+                // include relationships when saving layout
+                const auto rels_it = relationships_by_tree.find(app_state.selected_tree_id);
+                const auto &rels_for_save = rels_it != relationships_by_tree.end() ? rels_it->second : std::vector<Relationship>{};
+                storage::save_tree_layout(
+                    app_state.selected_tree_id,
+                    make_full_tree_layout(app_state, persons_it->second, rels_for_save));
+            });
+    };
+
+    const auto apply_tree_list_to_ui = [&]() {
+        app->set_tree_names(make_tree_name_model(trees));
+        app->set_tree_ids(make_tree_id_model(trees));
+        sync_selected_tree(*app, trees, app_state.selected_tree_id);
+
+        for (const auto &tree : trees) {
+            if (tree.id == app_state.selected_tree_id) {
+                app->set_tree_rename_name(slint::SharedString(tree.name));
+                return;
+            }
+        }
+
+        app->set_tree_rename_name(slint::SharedString());
+    };
+
+    const auto apply_current_tree_to_ui = [&]() {
+        const auto persons_it = persons_by_tree.find(app_state.selected_tree_id);
+        const auto relationships_it = relationships_by_tree.find(app_state.selected_tree_id);
+        const auto &persons = persons_it != persons_by_tree.end() ? persons_it->second : empty_persons;
+        static const std::vector<Relationship> empty_relationships;
+        const auto &relationships = relationships_it != relationships_by_tree.end() ? relationships_it->second : empty_relationships;
+
+        persons_model = make_person_model(persons);
+        relationship_line_cache = build_relationship_line_data(
+            persons,
+            relationships,
+            app_state.canvas_offset_x,
+            app_state.canvas_offset_y,
+            app_state.canvas_zoom);
+        relationship_lines_model = make_relationship_line_model(relationship_line_cache);
+
+        app->set_persons(persons_model);
+        app->set_relationship_lines(relationship_lines_model);
+        sync_selected_person(*app, persons, app_state.selected_person_id);
+        clear_selected_relationship(*app);
+        sync_inspector_draft(*app, nullptr);
+        app->set_inspector_edit_mode(app_state.inspector_edit_mode);
+        app->set_canvas_offset_x(app_state.canvas_offset_x);
+        app->set_canvas_offset_y(app_state.canvas_offset_y);
+        app->set_canvas_zoom(app_state.canvas_zoom);
+        sync_relationship_creation_ui(*app, relationship_creation_step);
+    };
+
+    const auto load_tree_cache_from_backend = [&](int tree_id) -> bool {
+        const auto persons_result = tree_api.fetch_persons(tree_id);
+        if (!persons_result.ok) {
+            std::cerr << "Tree API warning: failed to fetch persons for tree " << tree_id
+                      << ": " << tree_error_message_from_result(*persons_result.error) << "\n";
+            return false;
+        }
+
+        auto tree_persons = persons_from_records(persons_result.value);
         for (const auto &person : tree_persons) {
             next_person_id = std::max(next_person_id, person.id + 1);
         }
 
-        for (const auto &relationship : tree_relationships) {
-            next_relationship_id = std::max(next_relationship_id, relationship.id + 1);
+        const storage::TreeLayoutData stored_tree_layout = storage::load_tree_layout(tree_id);
+        apply_saved_person_positions(tree_persons, stored_tree_layout);
+
+        persons_by_tree[tree_id] = std::move(tree_persons);
+
+        // If layout file contains relationships, restore them locally; otherwise clear and log notice once.
+        if (!stored_tree_layout.relationships.empty()) {
+            relationships_by_tree[tree_id] = stored_tree_layout.relationships;
+        } else {
+            relationships_by_tree[tree_id].clear();
+
+            if (!relationship_load_notice_logged) {
+                std::cerr << "Tree API notice: current OpenAPI schema has no relationship list endpoint; "
+                             "relationships are left empty on backend tree load.\n";
+                relationship_load_notice_logged = true;
+            }
         }
 
-        persons_by_tree.emplace(tree.id, std::move(tree_persons));
-        relationships_by_tree.emplace(tree.id, std::move(tree_relationships));
+        return true;
+    };
+
+    std::function<bool(int, bool)> activate_tree;
+    activate_tree = [&](int tree_id, bool persist_ui_state) -> bool {
+        if (!tree_exists(trees, tree_id)) {
+            return false;
+        }
+
+        if (!load_tree_cache_from_backend(tree_id)) {
+            return false;
+        }
+
+        app_state.selected_tree_id = tree_id;
+        app_state.selected_person_id = -1;
+        app_state.selected_relationship_id = -1;
+        app_state.inspector_edit_mode = false;
+        relationship_creation_step = RelationshipCreationStep::Inactive;
+        relationship_first_person_id = -1;
+        relationship_second_person_id = -1;
+
+        const storage::TreeLayoutData restored_tree_layout = storage::load_tree_layout(app_state.selected_tree_id);
+        app_state.canvas_zoom = clamp_canvas_zoom(static_cast<float>(restored_tree_layout.canvas.zoom));
+        app_state.canvas_offset_x = static_cast<float>(restored_tree_layout.canvas.offset_x);
+        app_state.canvas_offset_y = static_cast<float>(restored_tree_layout.canvas.offset_y);
+
+        if (persist_ui_state) {
+            storage::save_ui_state(storage::UiStateData {
+                .last_tree_id = app_state.selected_tree_id,
+            });
+        }
+
+        apply_tree_list_to_ui();
+        apply_current_tree_to_ui();
+        return true;
+    };
+
+    const auto clear_tree_ui = [&]() {
+        app_state.selected_tree_id = -1;
+        app_state.selected_person_id = -1;
+        app_state.selected_relationship_id = -1;
+        app_state.inspector_edit_mode = false;
+        app_state.canvas_offset_x = 0.0f;
+        app_state.canvas_offset_y = 0.0f;
+        app_state.canvas_zoom = 1.0f;
+        relationship_creation_step = RelationshipCreationStep::Inactive;
+        relationship_first_person_id = -1;
+        relationship_second_person_id = -1;
+        apply_tree_list_to_ui();
+        apply_current_tree_to_ui();
+    };
+
+    const auto refresh_tree_list_from_backend = [&](std::optional<int> preferred_tree_id) -> bool {
+        const auto tree_list_result = tree_api.fetch_tree_list();
+        if (!tree_list_result.ok) {
+            std::cerr << "Tree API warning: failed to fetch tree list: "
+                      << tree_error_message_from_result(*tree_list_result.error) << "\n";
+            trees.clear();
+            clear_tree_ui();
+            return false;
+        }
+
+        trees = trees_from_summaries(tree_list_result.value);
+        if (trees.empty()) {
+            clear_tree_ui();
+            return true;
+        }
+
+        int target_tree_id = -1;
+        if (preferred_tree_id.has_value() && tree_exists(trees, *preferred_tree_id)) {
+            target_tree_id = *preferred_tree_id;
+        } else if (tree_exists(trees, app_state.selected_tree_id)) {
+            target_tree_id = app_state.selected_tree_id;
+        } else if (tree_exists(trees, restored_ui_state.last_tree_id)) {
+            target_tree_id = restored_ui_state.last_tree_id;
+        } else {
+            target_tree_id = trees.front().id;
+        }
+
+        if (!activate_tree(target_tree_id, false)) {
+            if (target_tree_id != trees.front().id) {
+                return activate_tree(trees.front().id, false);
+            }
+            clear_tree_ui();
+            return false;
+        }
+
+        return true;
+    };
+
+    apply_tree_list_to_ui();
+    apply_current_tree_to_ui();
+    app->set_is_edit_mode(app_state.is_edit_mode);
+    app->set_login_email_text(slint::SharedString(restored_session.email));
+    app->set_login_status_message("");
+    app->set_register_status_message("");
+
+    if (has_persisted_session(restored_session)) {
+        refresh_tree_list_from_backend(restored_ui_state.last_tree_id);
+        app->set_current_page(2);
     }
 
-    std::vector<Person> &persons = persons_by_tree[app_state.selected_tree_id];
-    RelationshipCreationStep relationship_creation_step = RelationshipCreationStep::Inactive;
-    int relationship_first_person_id = -1;
-    int relationship_second_person_id = -1;
-    auto persons_model = make_person_model(persons);
-    auto relationship_line_cache = build_relationship_line_data(
-        persons,
-        relationships_by_tree[app_state.selected_tree_id],
-        app_state.canvas_offset_x,
-        app_state.canvas_offset_y,
-        app_state.canvas_zoom);
-    auto relationship_lines_model = make_relationship_line_model(relationship_line_cache);
-
-    app->set_tree_names(make_tree_name_model(trees));
-    app->set_tree_ids(make_tree_id_model(trees));
-    sync_selected_tree(*app, trees, app_state.selected_tree_id);
-    app->set_persons(persons_model);
-    app->set_relationship_lines(relationship_lines_model);
-    sync_selected_person(*app, persons, app_state.selected_person_id);
-    clear_selected_relationship(*app);
-    sync_inspector_draft(*app, nullptr);
-    app->set_inspector_edit_mode(app_state.inspector_edit_mode);
-    app->set_is_edit_mode(app_state.is_edit_mode);
-    sync_relationship_creation_ui(*app, relationship_creation_step);
-    app->set_canvas_offset_x(app_state.canvas_offset_x);
-    app->set_canvas_offset_y(app_state.canvas_offset_y);
-    app->set_canvas_zoom(app_state.canvas_zoom);
-
-    app->on_login_clicked([app](slint::SharedString email, slint::SharedString password) {
+    app->on_login_clicked([app, &api_client, &auth_api, &refresh_tree_list_from_backend, &restored_ui_state](slint::SharedString email, slint::SharedString password) {
         const auto email_str = to_std_string(email);
         const auto password_str = to_std_string(password);
 
         std::cout << "login requested\n";
+        app->set_login_status_message("");
 
         if (email_str.empty() || password_str.empty()) {
             app->set_login_status_code(1);
             return;
         }
 
+        const auto login_result = auth_api.login(email_str, password_str);
+        if (!login_result.ok) {
+            app->set_login_status_code(0);
+            app->set_login_status_message(slint::SharedString(login_error_message_from_result(*login_result.error)));
+            return;
+        }
+
+        api_client.set_access_token(login_result.value.access_token);
         app->set_login_status_code(2);
+        app->set_login_status_message("");
+        app->set_login_password_text("");
+        const storage::SessionData session {
+            .access_token = login_result.value.access_token,
+            .refresh_token = login_result.value.refresh_token,
+            .email = email_str,
+        };
+        storage::save_session(session);
+        refresh_tree_list_from_backend(restored_ui_state.last_tree_id);
         app->set_current_page(2);
     });
 
-    app->on_register_clicked([app](slint::SharedString email, slint::SharedString password) {
+    app->on_register_clicked([app, &auth_api](slint::SharedString email, slint::SharedString password) {
         const auto email_str = to_std_string(email);
         const auto password_str = to_std_string(password);
 
         std::cout << "register requested\n";
+        app->set_register_status_message("");
 
         if (email_str.empty() || password_str.empty()) {
             app->set_register_status_code(1);
             return;
         }
 
+        const auto register_result = auth_api.register_user(email_str, password_str);
+        if (!register_result.ok) {
+            app->set_register_status_code(0);
+            app->set_register_status_message(slint::SharedString(register_error_message_from_result(*register_result.error)));
+            return;
+        }
+
         app->set_register_status_code(2);
+        app->set_register_status_message("");
     });
 
-    app->on_tree_selected([app, trees, &app_state, &persons_by_tree, &relationships_by_tree, &persons_model, &relationship_line_cache, &relationship_lines_model, &relationship_creation_step, &relationship_first_person_id, &relationship_second_person_id](int tree_id) {
-        for (const auto &tree : trees) {
-            if (tree.id == tree_id) {
-                app_state.selected_tree_id = tree.id;
-                app_state.selected_person_id = -1;
-                app_state.selected_relationship_id = -1;
-                auto &persons = persons_by_tree[app_state.selected_tree_id];
-                auto &relationships = relationships_by_tree[app_state.selected_tree_id];
-                app_state.inspector_edit_mode = false;
-                relationship_creation_step = RelationshipCreationStep::Inactive;
-                relationship_first_person_id = -1;
-                relationship_second_person_id = -1;
+    app->on_logout_requested([app, &api_client, &auth_api, &restored_session]() {
+        std::cout << "logout requested\n";
 
-                sync_selected_tree(*app, trees, app_state.selected_tree_id);
-                persons_model = make_person_model(persons);
-                relationship_line_cache = build_relationship_line_data(
-                    persons,
-                    relationships,
-                    app_state.canvas_offset_x,
-                    app_state.canvas_offset_y,
-                    app_state.canvas_zoom);
-                relationship_lines_model = make_relationship_line_model(relationship_line_cache);
-                app->set_persons(persons_model);
-                app->set_relationship_lines(relationship_lines_model);
-                sync_selected_person(*app, persons, app_state.selected_person_id);
-                clear_selected_relationship(*app);
-                sync_inspector_draft(*app, nullptr);
-                app->set_inspector_edit_mode(app_state.inspector_edit_mode);
-                sync_relationship_creation_ui(*app, relationship_creation_step);
-                return;
+        // Call logout API if we have a refresh token
+        if (!restored_session.refresh_token.empty()) {
+            const auto logout_result = auth_api.logout(restored_session.refresh_token);
+            if (!logout_result.ok) {
+                std::cerr << "Logout API warning: failed to logout: "
+                          << tree_error_message_from_result(*logout_result.error) << "\n";
+                // Continue with local logout even if API fails
             }
         }
+
+        // Clear session
+        api_client.clear_access_token();
+        storage::save_session(storage::SessionData{});
+
+        // Clear UI state
+        storage::save_ui_state(storage::UiStateData{});
+
+        // Reset to login page
+        app->set_current_page(0);
+        app->set_login_email_text(slint::SharedString(restored_session.email)); // Keep email for convenience
+        app->set_login_password_text("");
+        app->set_login_status_message("");
+    });
+
+    app->on_add_tree_requested([&tree_api, &refresh_tree_list_from_backend, &trees]() {
+        const std::string default_tree_name = "New Tree " + std::to_string(trees.size() + 1);
+        const auto create_result = tree_api.create_tree(default_tree_name);
+        if (!create_result.ok) {
+            std::cerr << "Tree API warning: failed to create tree: "
+                      << tree_error_message_from_result(*create_result.error) << "\n";
+            return;
+        }
+
+        refresh_tree_list_from_backend(create_result.value.tree_id);
+    });
+
+    app->on_tree_rename_name_edited([&tree_rename_name](slint::SharedString new_name) {
+        tree_rename_name = to_std_string(new_name);
+    });
+
+    app->on_rename_tree_requested([&app_state, &tree_api, &refresh_tree_list_from_backend, &tree_rename_name]() {
+        if (app_state.selected_tree_id < 0) {
+            return;
+        }
+        if (tree_rename_name.empty()) {
+            return;
+        }
+
+        const auto update_result = tree_api.update_tree(app_state.selected_tree_id, tree_rename_name);
+        if (!update_result.ok) {
+            std::cerr << "Tree API warning: failed to rename tree: "
+                      << tree_error_message_from_result(*update_result.error) << "\n";
+            return;
+        }
+
+        refresh_tree_list_from_backend(app_state.selected_tree_id);
+    });
+
+    app->on_delete_tree_requested([&app, &app_state, &tree_api, &refresh_tree_list_from_backend]() {
+        if (app_state.selected_tree_id < 0) {
+            return;
+        }
+
+        const int deleted_tree_id = app_state.selected_tree_id;
+        const auto delete_result = tree_api.delete_tree(deleted_tree_id);
+        if (!delete_result.ok) {
+            std::cerr << "Tree API warning: failed to delete tree: "
+                      << tree_error_message_from_result(*delete_result.error) << "\n";
+            return;
+        }
+
+        const auto app_data_directory = storage::default_app_data_directory();
+        const auto tree_layout_path = storage::tree_layout_file_path(app_data_directory, deleted_tree_id);
+        std::error_code remove_error;
+        std::filesystem::remove(tree_layout_path, remove_error);
+        if (remove_error) {
+            std::cerr << "Persistence warning: failed to remove stale tree layout '"
+                      << tree_layout_path.string() << "': " << remove_error.message() << "\n";
+        }
+
+        refresh_tree_list_from_backend(std::nullopt);
+    });
+
+    app->on_tree_selected([&activate_tree](int tree_id) {
+        activate_tree(tree_id, true);
     });
 
     app->on_person_selected([app, &persons_by_tree, &app_state, &relationship_creation_step, &relationship_first_person_id, &relationship_second_person_id](int person_id) {
@@ -908,7 +1430,7 @@ int main()
         }
     });
 
-    app->on_person_move_finished([app, &persons_by_tree, &relationships_by_tree, &app_state, &persons_model, &relationship_line_cache, &relationship_lines_model, &drag_start_positions](int person_id, float x, float y) {
+    app->on_person_move_finished([app, &persons_by_tree, &relationships_by_tree, &app_state, &persons_model, &relationship_line_cache, &relationship_lines_model, &drag_start_positions, &schedule_tree_layout_save](int person_id, float x, float y) {
         if (!app_state.is_edit_mode || app_state.selected_tree_id < 0) {
             return;
         }
@@ -953,9 +1475,10 @@ int main()
         }
 
         drag_start_positions.erase(person_id);
+        schedule_tree_layout_save();
     });
 
-    app->on_add_person_requested([app, &persons_by_tree, &relationships_by_tree, &app_state, &persons_model, &relationship_line_cache, &relationship_lines_model, &next_person_id]() {
+    app->on_add_person_requested([app, &tree_api, &persons_by_tree, &relationships_by_tree, &app_state, &persons_model, &relationship_line_cache, &relationship_lines_model, &next_temporary_person_id, &schedule_tree_layout_save]() {
         if (!app_state.is_edit_mode) {
             std::cout << "add person ignored (view mode)\n";
             return;
@@ -971,12 +1494,13 @@ int main()
         const float default_y = (190.0f - app_state.canvas_offset_y) / app_state.canvas_zoom;
 
         Person person {
-            .id = next_person_id++,
+            .id = next_temporary_person_id--,
             .first_name = "New",
             .middle_name = "",
             .last_name = "Person",
             .birth_date = "",
             .death_date = "",
+            .description = "",
             .x = default_x,
             .y = default_y,
         };
@@ -1000,9 +1524,36 @@ int main()
         if (app_state.is_edit_mode) {
             app->set_selected_person_id(app_state.selected_person_id);
         }
+
+        const auto create_result = tree_api.create_person(app_state.selected_tree_id, person_mutation_data_from_person(person));
+        if (!create_result.ok) {
+            std::cerr << "Tree API warning: failed to create person: "
+                      << graph_mutation_error_message_from_result(*create_result.error) << "\n";
+            persons.pop_back();
+            persons_model->erase(persons_model->row_count() - 1);
+            relationship_line_cache = build_relationship_line_data(
+                persons,
+                relationships,
+                app_state.canvas_offset_x,
+                app_state.canvas_offset_y,
+                app_state.canvas_zoom);
+            relationship_lines_model = make_relationship_line_model(relationship_line_cache);
+            app->set_relationship_lines(relationship_lines_model);
+            app_state.selected_person_id = -1;
+            clear_selected_person(*app);
+            sync_inspector_draft(*app, nullptr);
+            return;
+        }
+
+        persons.back().id = create_result.value.person_id;
+        persons_model->set_row_data(persons.size() - 1, to_person_node(persons.back()));
+        app_state.selected_person_id = create_result.value.person_id;
+        sync_selected_person(*app, persons, app_state.selected_person_id);
+        sync_inspector_draft(*app, &persons.back());
+        schedule_tree_layout_save();
     });
 
-    app->on_relationship_creation_started([app, &app_state, &relationship_creation_step, &relationship_first_person_id, &relationship_second_person_id]() {
+    app->on_relationship_creation_started([app, &app_state, &relationship_error_timer, &relationship_creation_step, &relationship_first_person_id, &relationship_second_person_id]() {
         if (!app_state.is_edit_mode || app_state.selected_tree_id < 0) {
             if (!app_state.is_edit_mode) {
                 std::cout << "relationship creation ignored (view mode)\n";
@@ -1010,6 +1561,8 @@ int main()
             return;
         }
 
+        relationship_error_timer.stop();
+        app->set_relationship_error_message(slint::SharedString());
         relationship_creation_step = RelationshipCreationStep::SelectFirstPerson;
         relationship_first_person_id = -1;
         relationship_second_person_id = -1;
@@ -1026,14 +1579,16 @@ int main()
         }
     });
 
-    app->on_relationship_creation_canceled([app, &relationship_creation_step, &relationship_first_person_id, &relationship_second_person_id]() {
+    app->on_relationship_creation_canceled([app, &relationship_error_timer, &relationship_creation_step, &relationship_first_person_id, &relationship_second_person_id]() {
+        relationship_error_timer.stop();
+        app->set_relationship_error_message(slint::SharedString());
         relationship_creation_step = RelationshipCreationStep::Inactive;
         relationship_first_person_id = -1;
         relationship_second_person_id = -1;
         sync_relationship_creation_ui(*app, relationship_creation_step);
     });
 
-    app->on_relationship_type_selected([app, &persons_by_tree, &relationships_by_tree, &app_state, &relationship_line_cache, &relationship_lines_model, &relationship_creation_step, &relationship_first_person_id, &relationship_second_person_id, &next_relationship_id](slint::SharedString relationship_type_value) {
+    app->on_relationship_type_selected([app, &tree_api, &persons_by_tree, &relationships_by_tree, &app_state, &relationship_line_cache, &relationship_lines_model, &relationship_error_timer, &relationship_creation_step, &relationship_first_person_id, &relationship_second_person_id, &next_temporary_relationship_id, &schedule_tree_layout_save](slint::SharedString relationship_type_value) {
         if (!app_state.is_edit_mode) {
             std::cout << "relationship creation ignored (view mode)\n";
             return;
@@ -1052,7 +1607,17 @@ int main()
         const auto relationship_type_string = to_std_string(relationship_type_value);
         const auto relationship_type = relationship_type_from_string(relationship_type_string);
 
-        if (!relationship_type.has_value() || relationship_exists(relationships, relationship_first_person_id, relationship_second_person_id, *relationship_type)) {
+        if (!relationship_type.has_value()) {
+            app->set_relationship_error_message(slint::SharedString("Invalid relationship type."));
+            relationship_creation_step = RelationshipCreationStep::Inactive;
+            relationship_first_person_id = -1;
+            relationship_second_person_id = -1;
+            sync_relationship_creation_ui(*app, relationship_creation_step);
+            return;
+        }
+
+        if (relationship_exists(relationships, relationship_first_person_id, relationship_second_person_id, *relationship_type)) {
+            app->set_relationship_error_message(slint::SharedString("Relationship already exists."));
             relationship_creation_step = RelationshipCreationStep::Inactive;
             relationship_first_person_id = -1;
             relationship_second_person_id = -1;
@@ -1061,7 +1626,7 @@ int main()
         }
 
         relationships.push_back(Relationship {
-            .id = next_relationship_id++,
+            .id = next_temporary_relationship_id--,
             .from_person_id = relationship_first_person_id,
             .to_person_id = relationship_second_person_id,
             .relationship_type = *relationship_type,
@@ -1080,9 +1645,47 @@ int main()
         relationship_first_person_id = -1;
         relationship_second_person_id = -1;
         sync_relationship_creation_ui(*app, relationship_creation_step);
+
+        const auto create_result = tree_api.create_relationship(
+            relationships.back().from_person_id,
+            relationships.back().to_person_id,
+            relationship_type_string);
+        if (!create_result.ok) {
+            const std::string error_text = "Failed to create relationship: " + graph_mutation_error_message_from_result(*create_result.error);
+            std::cerr << "Tree API warning: " << error_text << "\n";
+            app->set_relationship_error_message(slint::SharedString(error_text));
+            relationship_error_timer.start(
+                slint::TimerMode::SingleShot,
+                std::chrono::milliseconds(4500),
+                [app]() {
+                    app->set_relationship_error_message(slint::SharedString());
+                });
+            relationships.pop_back();
+            relationship_line_cache = build_relationship_line_data(
+                persons,
+                relationships,
+                app_state.canvas_offset_x,
+                app_state.canvas_offset_y,
+                app_state.canvas_zoom);
+            relationship_lines_model = make_relationship_line_model(relationship_line_cache);
+            app->set_relationship_lines(relationship_lines_model);
+            return;
+        }
+
+        app->set_relationship_error_message(slint::SharedString());
+        relationships.back().id = create_result.value.relationship_id;
+        relationship_line_cache = build_relationship_line_data(
+            persons,
+            relationships,
+            app_state.canvas_offset_x,
+            app_state.canvas_offset_y,
+            app_state.canvas_zoom);
+        relationship_lines_model = make_relationship_line_model(relationship_line_cache);
+        app->set_relationship_lines(relationship_lines_model);
+        schedule_tree_layout_save();
     });
 
-    app->on_auto_layout_requested([app, &persons_by_tree, &relationships_by_tree, &app_state, &persons_model, &relationship_line_cache, &relationship_lines_model]() {
+    app->on_auto_layout_requested([app, &persons_by_tree, &relationships_by_tree, &app_state, &persons_model, &relationship_line_cache, &relationship_lines_model, &schedule_tree_layout_save]() {
         if (!app_state.is_edit_mode) {
             return;
         }
@@ -1112,6 +1715,8 @@ int main()
         if (app_state.selected_person_id >= 0) {
             sync_selected_person(*app, persons, app_state.selected_person_id);
         }
+
+        schedule_tree_layout_save();
     });
 
     app->on_inspector_edit_started([app, &persons_by_tree, &app_state]() {
@@ -1144,7 +1749,7 @@ int main()
         app->set_inspector_edit_mode(app_state.inspector_edit_mode);
     });
 
-    app->on_inspector_edit_saved([app, &persons_by_tree, &app_state, &persons_model](void) {
+    app->on_inspector_edit_saved([app, &tree_api, &persons_by_tree, &app_state, &persons_model](void) {
         if (!app_state.is_edit_mode) {
             std::cout << "save person ignored (view mode)\n";
             return;
@@ -1163,20 +1768,46 @@ int main()
             return;
         }
 
+        const Person previous_person = *it;
         const auto row = static_cast<size_t>(std::distance(persons.begin(), it));
         it->first_name = to_std_string(app->get_inspector_draft_first_name());
         it->middle_name = to_std_string(app->get_inspector_draft_middle_name());
         it->last_name = to_std_string(app->get_inspector_draft_last_name());
-        it->birth_date = to_std_string(app->get_inspector_draft_birth_date());
-        it->death_date = to_std_string(app->get_inspector_draft_death_date());
+        it->birth_date = validate_and_normalize_date(to_std_string(app->get_inspector_draft_birth_date()));
+        it->death_date = validate_and_normalize_date(to_std_string(app->get_inspector_draft_death_date()));
+        it->description = to_std_string(app->get_inspector_draft_description());
         persons_model->set_row_data(row, to_person_node(*it));
         sync_selected_person(*app, persons, app_state.selected_person_id);
         sync_inspector_draft(*app, &(*it));
+
+        const auto update_data = person_update_data_from_changes(previous_person, *it);
+        if (!update_data.first_name.has_value()
+            && !update_data.middle_name.has_value()
+            && !update_data.last_name.has_value()
+            && !update_data.birth_date.has_value()
+            && !update_data.death_date.has_value()
+            && !update_data.description.has_value()) {
+            app_state.inspector_edit_mode = false;
+            app->set_inspector_edit_mode(app_state.inspector_edit_mode);
+            return;
+        }
+
+        const auto update_result = tree_api.update_person(it->id, update_data);
+        if (!update_result.ok) {
+            std::cerr << "Tree API warning: failed to update person: "
+                      << graph_mutation_error_message_from_result(*update_result.error) << "\n";
+            *it = previous_person;
+            persons_model->set_row_data(row, to_person_node(*it));
+            sync_selected_person(*app, persons, app_state.selected_person_id);
+            sync_inspector_draft(*app, &(*it));
+            return;
+        }
+
         app_state.inspector_edit_mode = false;
         app->set_inspector_edit_mode(app_state.inspector_edit_mode);
     });
 
-    app->on_delete_person_requested([app, &persons_by_tree, &relationships_by_tree, &app_state, &persons_model, &relationship_line_cache, &relationship_lines_model]() {
+    app->on_delete_person_requested([app, &tree_api, &persons_by_tree, &relationships_by_tree, &app_state, &persons_model, &relationship_line_cache, &relationship_lines_model, &schedule_tree_layout_save]() {
         if (!app_state.is_edit_mode) {
             std::cout << "delete person ignored (view mode)\n";
             return;
@@ -1196,6 +1827,14 @@ int main()
             return;
         }
 
+        const Person deleted_person = *person_it;
+        std::vector<Relationship> deleted_relationships;
+        for (const auto &relationship : relationships) {
+            if (relationship.from_person_id == app_state.selected_person_id
+                || relationship.to_person_id == app_state.selected_person_id) {
+                deleted_relationships.push_back(relationship);
+            }
+        }
         const auto row = static_cast<size_t>(std::distance(persons.begin(), person_it));
         persons.erase(person_it);
         persons_model->erase(row);
@@ -1222,9 +1861,33 @@ int main()
         clear_selected_relationship(*app);
         app_state.inspector_edit_mode = false;
         app->set_inspector_edit_mode(app_state.inspector_edit_mode);
+
+        const auto delete_result = tree_api.delete_person(deleted_person.id);
+        if (!delete_result.ok) {
+            std::cerr << "Tree API warning: failed to delete person: "
+                      << graph_mutation_error_message_from_result(*delete_result.error) << "\n";
+            persons.insert(persons.begin() + static_cast<std::ptrdiff_t>(row), deleted_person);
+            persons_model = make_person_model(persons);
+            app->set_persons(persons_model);
+            relationships.insert(relationships.end(), deleted_relationships.begin(), deleted_relationships.end());
+            relationship_line_cache = build_relationship_line_data(
+                persons,
+                relationships,
+                app_state.canvas_offset_x,
+                app_state.canvas_offset_y,
+                app_state.canvas_zoom);
+            relationship_lines_model = make_relationship_line_model(relationship_line_cache);
+            app->set_relationship_lines(relationship_lines_model);
+            app_state.selected_person_id = deleted_person.id;
+            sync_selected_person(*app, persons, app_state.selected_person_id);
+            sync_inspector_draft(*app, &persons[row]);
+            return;
+        }
+
+        schedule_tree_layout_save();
     });
 
-    app->on_delete_relationship_requested([app, &persons_by_tree, &relationships_by_tree, &app_state, &relationship_line_cache, &relationship_lines_model]() {
+    app->on_delete_relationship_requested([app, &tree_api, &persons_by_tree, &relationships_by_tree, &app_state, &relationship_line_cache, &relationship_lines_model, &schedule_tree_layout_save]() {
         if (!app_state.is_edit_mode) {
             std::cout << "delete relationship ignored (view mode)\n";
             return;
@@ -1244,6 +1907,8 @@ int main()
             return;
         }
 
+        const Relationship deleted_relationship = *it;
+        const auto deleted_row = static_cast<size_t>(std::distance(relationships.begin(), it));
         relationships.erase(it);
         relationship_line_cache = build_relationship_line_data(
             persons,
@@ -1255,6 +1920,26 @@ int main()
         app->set_relationship_lines(relationship_lines_model);
         app_state.selected_relationship_id = -1;
         clear_selected_relationship(*app);
+
+        const auto delete_result = tree_api.delete_relationship(deleted_relationship.id);
+        if (!delete_result.ok) {
+            std::cerr << "Tree API warning: failed to delete relationship: "
+                      << graph_mutation_error_message_from_result(*delete_result.error) << "\n";
+            relationships.insert(relationships.begin() + static_cast<std::ptrdiff_t>(deleted_row), deleted_relationship);
+            relationship_line_cache = build_relationship_line_data(
+                persons,
+                relationships,
+                app_state.canvas_offset_x,
+                app_state.canvas_offset_y,
+                app_state.canvas_zoom);
+            relationship_lines_model = make_relationship_line_model(relationship_line_cache);
+            app->set_relationship_lines(relationship_lines_model);
+            app_state.selected_relationship_id = deleted_relationship.id;
+            sync_selected_relationship(*app, persons, relationships, app_state.selected_relationship_id);
+            return;
+        }
+
+        schedule_tree_layout_save();
     });
 
     app->on_inspector_draft_first_name_edited([app, &app_state](slint::SharedString value) {
@@ -1302,6 +1987,15 @@ int main()
         app->set_inspector_draft_death_date(value);
     });
 
+    app->on_inspector_draft_description_edited([app, &app_state](slint::SharedString value) {
+        if (!app_state.is_edit_mode) {
+            std::cout << "edit person ignored (view mode)\n";
+            return;
+        }
+
+        app->set_inspector_draft_description(value);
+    });
+
     app->on_toggle_edit_mode([app, &app_state, &relationship_creation_step, &relationship_first_person_id, &relationship_second_person_id]() {
         app_state.is_edit_mode = !app_state.is_edit_mode;
         app->set_is_edit_mode(app_state.is_edit_mode);
@@ -1314,7 +2008,7 @@ int main()
         }
     });
 
-    app->on_canvas_panned([app, &persons_by_tree, &relationships_by_tree, &app_state, &relationship_line_cache, &relationship_lines_model](float offset_x, float offset_y) {
+    app->on_canvas_panned([app, &persons_by_tree, &relationships_by_tree, &app_state, &relationship_line_cache, &relationship_lines_model, &schedule_tree_layout_save](float offset_x, float offset_y) {
         app_state.canvas_offset_x = offset_x;
         app_state.canvas_offset_y = offset_y;
         app->set_canvas_offset_x(app_state.canvas_offset_x);
@@ -1329,10 +2023,11 @@ int main()
                 app_state.canvas_zoom);
             relationship_lines_model = make_relationship_line_model(relationship_line_cache);
             app->set_relationship_lines(relationship_lines_model);
+            schedule_tree_layout_save();
         }
     });
 
-    app->on_canvas_zoom_changed([app, &persons_by_tree, &relationships_by_tree, &app_state, &relationship_line_cache, &relationship_lines_model](float zoom) {
+    app->on_canvas_zoom_changed([app, &persons_by_tree, &relationships_by_tree, &app_state, &relationship_line_cache, &relationship_lines_model, &schedule_tree_layout_save](float zoom) {
         app_state.canvas_zoom = clamp_canvas_zoom(zoom);
         app->set_canvas_zoom(app_state.canvas_zoom);
 
@@ -1345,9 +2040,22 @@ int main()
                 app_state.canvas_zoom);
             relationship_lines_model = make_relationship_line_model(relationship_line_cache);
             app->set_relationship_lines(relationship_lines_model);
+            schedule_tree_layout_save();
         }
     });
 
     app->run();
+
+    if (app_state.selected_tree_id >= 0) {
+        const auto persons_it = persons_by_tree.find(app_state.selected_tree_id);
+        if (persons_it != persons_by_tree.end()) {
+            const auto rels_it = relationships_by_tree.find(app_state.selected_tree_id);
+            const auto &rels_for_save = rels_it != relationships_by_tree.end() ? rels_it->second : std::vector<Relationship>{};
+            storage::save_tree_layout(
+                app_state.selected_tree_id,
+                make_full_tree_layout(app_state, persons_it->second, rels_for_save));
+        }
+    }
+
     return 0;
 }

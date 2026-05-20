@@ -9,6 +9,7 @@ struct Person {
     std::string last_name;
     std::string birth_date;
     std::string death_date;
+    std::string description;
     float x;
     float y;
 };

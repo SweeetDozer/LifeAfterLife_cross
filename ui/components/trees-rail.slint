@@ -4,15 +4,23 @@ export component TreesRail inherits Rectangle {
     in property <[string]> tree_names: [];
     in property <[int]> tree_ids: [];
     in property <int> selected_tree_id: -1;
+    in property <string> selected_tree_name: "";
+    in-out property <string> tree_rename_name: "";
     in property <bool> collapsed: false;
     in property <bool> settings_view: false;
 
     callback tree_selected(int);
+    callback add_tree_requested();
+    callback tree_rename_name_edited(string);
+    callback rename_tree_requested();
+    callback delete_tree_requested();
     callback toggle_collapsed();
     callback open_settings();
     callback close_settings();
+    callback logout_requested();
 
     private property <length> collapsed_handle_height: 120px;
+    private property <int> rename_tree_focus_id: -1;
 
     background: root.collapsed ? transparent : #f7f1ea;
     border-radius: root.collapsed ? 0px : 18px;
@@ -138,9 +146,10 @@ export component TreesRail inherits Rectangle {
 
             for tree_name[index] in root.tree_names : TouchArea {
                 height: 44px;
-
+                width: parent.width;
                 clicked => {
                     root.tree_selected(root.tree_ids[index]);
+                    root.rename_tree_focus_id = -1;
                 }
 
                 Rectangle {
@@ -150,22 +159,132 @@ export component TreesRail inherits Rectangle {
                     border-radius: 12px;
                     border-width: root.selected_tree_id == root.tree_ids[index] ? 1px : 0px;
                     border-color: #d5b898;
+                    clip: true;
 
-                    Text {
-                        width: parent.width;
+                HorizontalLayout {
+                    width: parent.width;
+                    height: parent.height;
+                    spacing: 8px;
+
+                    TouchArea {
+                        width: parent.width - 88px;
                         height: parent.height;
-                        text: tree_name;
-                        color: root.selected_tree_id == root.tree_ids[index] ? #4f3b2e : #6b5645;
-                        font-size: 15px;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
+
+                        clicked => {
+                            root.tree_selected(root.tree_ids[index]);
+                            root.rename_tree_focus_id = -1;
+                        }
+
+                        Rectangle {
+                            width: parent.width;
+                            height: parent.height;
+                            background: transparent;
+
+                            rename_input := TextInput {
+                                visible: root.rename_tree_focus_id == root.tree_ids[index];
+                                x: 12px;
+                                y: 6px;
+                                width: parent.width - 24px;
+                                height: parent.height - 12px;
+                                text <=> root.tree_rename_name;
+                                font-size: 15px;
+                                color: #4f3b2e;
+                                selection-background-color: #ead8c5;
+                                selection-foreground-color: #4f3b2e;
+                                single-line: true;
+                                vertical-alignment: center;
+                                edited => {
+                                    root.tree_rename_name = self.text;
+                                    root.tree_rename_name_edited(self.text);
+                                }
+                            }
+
+                            Text {
+                                visible: root.rename_tree_focus_id != root.tree_ids[index];
+                                x: 16px;
+                                width: parent.width - 32px;
+                                height: parent.height;
+                                text: tree_name;
+                                color: root.selected_tree_id == root.tree_ids[index] ? #4f3b2e : #6b5645;
+                                font-size: 15px;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+
+                    TouchArea {
+                        width: 34px;
+                        height: parent.height;
+
+                        clicked => {
+                            root.tree_selected(root.tree_ids[index]);
+                            if (root.rename_tree_focus_id == root.tree_ids[index]) {
+                                root.rename_tree_requested();
+                                root.rename_tree_focus_id = -1;
+                            } else {
+                                root.rename_tree_focus_id = root.tree_ids[index];
+                                root.tree_rename_name = tree_name;
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width;
+                            height: parent.height;
+                            background: parent.has-hover ? #dfc19d : #e8d0b4;
+                            border-radius: 12px;
+                            border-width: 1px;
+                            border-color: parent.has-hover ? #a87441 : #b98858;
+
+                            Text {
+                                width: parent.width;
+                                height: parent.height;
+                                text: root.rename_tree_focus_id == root.tree_ids[index] ? "✔" : "✎";
+                                color: #4f3b2e;
+                                font-size: 18px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+
+                    TouchArea {
+                        width: 34px;
+                        height: parent.height;
+
+                        clicked => {
+                            root.tree_selected(root.tree_ids[index]);
+                            root.delete_tree_requested();
+                        }
+
+                        Rectangle {
+                            width: parent.width;
+                            height: parent.height;
+                            background: parent.has-hover ? #f0c2c2 : #f8e2e0;
+                            border-radius: 12px;
+                            border-width: 1px;
+                            border-color: parent.has-hover ? #d17a7a : #e5b3b3;
+
+                            Text {
+                                width: parent.width;
+                                height: parent.height;
+                                text: "🗑︎";
+                                font-size: 18px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
                     }
                 }
             }
         }
+        }
 
         if (!root.settings_view) : TouchArea {
             height: 46px;
+
+            clicked => {
+                root.add_tree_requested();
+            }
 
             Rectangle {
                 width: parent.width;
@@ -225,6 +344,41 @@ export component TreesRail inherits Rectangle {
                         height: parent.height;
                         text: index == 0 ? Strings.language_english_label : Strings.language_russian_label;
                         color: Strings.current_language == language ? #4f3b2e : #6b5645;
+                        font-size: 15px;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            if (root.selected_tree_id < 0) : Text {
+                width: parent.width;
+                text: Strings.no_tree_selected;
+                wrap: word-wrap;
+                color: #8a7665;
+            }
+
+            TouchArea {
+                height: 46px;
+
+                clicked => {
+                    root.logout_requested();
+                }
+
+                Rectangle {
+                    width: parent.width;
+                    height: parent.height;
+                    background: parent.has-hover ? #dfc19d : #e8d0b4;
+                    border-radius: 14px;
+                    border-width: 1px;
+                    border-color: parent.has-hover ? #a87441 : #b98858;
+
+                    Text {
+                        width: parent.width;
+                        height: parent.height;
+                        text: Strings.logout_action;
+                        color: #4f3b2e;
                         font-size: 15px;
                         font-weight: 600;
                         horizontal-alignment: center;

@@ -18,12 +18,20 @@ if (NOT Slint_FOUND)
 endif()
 
 add_executable(${PROJECT_NAME}
+    src/api/api_client.cpp
+    src/api/auth_api.cpp
+    src/api/tree_api.cpp
     src/main.cpp
+    src/storage/persistence.cpp
     src/utils/formatters.cpp
     src/ui_sync/sync.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE Slint::Slint)
+
+if (WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE winhttp)
+endif()
 
 slint_target_sources(${PROJECT_NAME}
     ui/app-window.slint

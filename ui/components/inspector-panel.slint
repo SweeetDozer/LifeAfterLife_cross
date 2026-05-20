@@ -18,6 +18,7 @@ export component InspectorPanel inherits Rectangle {
     in property <string> selected_person_last_name: "";
     in property <string> selected_person_birth_date: "";
     in property <string> selected_person_death_date: "";
+    in property <string> selected_person_description: "";
     in property <bool> inspector_edit_mode: false;
     in property <bool> is_edit_mode: false;
     in property <string> inspector_draft_first_name: "";
@@ -25,6 +26,7 @@ export component InspectorPanel inherits Rectangle {
     in property <string> inspector_draft_last_name: "";
     in property <string> inspector_draft_birth_date: "";
     in property <string> inspector_draft_death_date: "";
+    in property <string> inspector_draft_description: "";
 
     callback inspector_edit_started();
     callback inspector_edit_canceled();
@@ -36,6 +38,7 @@ export component InspectorPanel inherits Rectangle {
     callback inspector_draft_last_name_edited(string);
     callback inspector_draft_birth_date_edited(string);
     callback inspector_draft_death_date_edited(string);
+    callback inspector_draft_description_edited(string);
     private property <bool> confirm_person_delete: false;
     private property <bool> has_unsaved_changes:
         root.inspector_edit_mode
@@ -45,6 +48,7 @@ export component InspectorPanel inherits Rectangle {
             || root.inspector_draft_last_name != root.selected_person_last_name
             || root.inspector_draft_birth_date != root.selected_person_birth_date
             || root.inspector_draft_death_date != root.selected_person_death_date
+            || root.inspector_draft_description != root.selected_person_description
         );
     private property <string> selected_person_display_name:
         root.selected_person_first_name == "" && root.selected_person_middle_name == "" && root.selected_person_last_name == ""
@@ -753,7 +757,7 @@ export component InspectorPanel inherits Rectangle {
                                 }
                             }
 
-                            Rectangle {
+                            if (!root.inspector_edit_mode || !root.is_edit_mode) : Rectangle {
                                 background: #f8f1e8;
                                 border-radius: 12px;
                                 border-color: #e2d4c3;
@@ -770,9 +774,53 @@ export component InspectorPanel inherits Rectangle {
                                     }
 
                                     Text {
-                                        text: Strings.no_extended_details;
-                                        color: #95806f;
+                                        text: root.selected_person_description == "" ? Strings.no_extended_details : root.selected_person_description;
+                                        color: #4f3b2e;
                                         wrap: word-wrap;
+                                    }
+                                }
+                            }
+
+                            if (root.inspector_edit_mode && root.is_edit_mode) : VerticalLayout {
+                                spacing: 8px;
+
+                                Text {
+                                    text: Strings.details_title;
+                                    color: #6b5645;
+                                }
+
+                                Rectangle {
+                                    height: 120px;
+                                    background: #fffdf9;
+                                    border-radius: 12px;
+                                    border-color: description_input.has-focus ? #c79f77 : #d8c7b5;
+                                    border-width: 1px;
+                                    clip: true;
+
+                                    description_input := TextInput {
+                                        x: 12px;
+                                        y: 10px;
+                                        width: parent.width - 24px;
+                                        height: parent.height - 20px;
+                                        text: root.inspector_draft_description;
+                                        color: #4f3b2e;
+                                        selection-background-color: #ead8c5;
+                                        selection-foreground-color: #4f3b2e;
+                                        vertical-alignment: top;
+                                        wrap: word-wrap;
+                                        edited => {
+                                            root.inspector_draft_description_edited(self.text);
+                                        }
+                                    }
+
+                                    if (root.inspector_draft_description == "" && !description_input.has-focus) : Text {
+                                        x: 12px;
+                                        y: 10px;
+                                        width: parent.width - 24px;
+                                        height: parent.height;
+                                        text: Strings.optional_label;
+                                        color: #b69f8b;
+                                        vertical-alignment: top;
                                     }
                                 }
                             }
