@@ -53,7 +53,8 @@ constexpr float kDragResolveMaxRadius = 280.0f;
 
 std::string to_std_string(const slint::SharedString &value)
 {
-    return { value.data(), value.size() };
+    std::string_view sv = value;  // SharedString неявно конвертируется
+    return { sv.data(), sv.size() };
 }
 
 std::string format_person_name(const Person &person)
@@ -72,14 +73,20 @@ std::string to_lower_copy(std::string value)
 std::string login_error_message_from_result(const api::ApiError &error)
 {
     if (error.type == api::ApiErrorType::Network) {
-        return "Could not reach the server. Check your connection.";
+        return error.message.empty()
+            ? "Could not reach the server. Check your connection."
+            : "Network error: " + error.message;
     }
 
     if (error.http_status == 401 || error.http_status == 403) {
         return "Invalid email or password.";
     }
 
-    return "Could not complete the request. Please try again.";
+    if (error.http_status != 0) {
+        return "HTTP " + std::to_string(error.http_status) + ": " + error.message;
+    }
+
+    return error.message.empty() ? "Could not complete the request. Please try again." : error.message;
 }
 
 std::string register_error_message_from_result(const api::ApiError &error)
@@ -881,7 +888,7 @@ void sync_selected_tree(const AppWindow &app, const std::vector<Tree> &trees, in
 
 }
 
-int main()
+int lal_run_application()
 {
     auto app = AppWindow::create();
     AppState app_state {};
@@ -2059,3 +2066,15 @@ int main()
 
     return 0;
 }
+
+#ifndef __ANDROID__
+int main()
+{
+    return lal_run_application();
+}
+#else
+extern "C" int lal_android_main()
+{
+    return lal_run_application();
+}
+#endif

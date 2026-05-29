@@ -1,4 +1,5 @@
 #include "persistence.h"
+#include "../platform/android_support.h"
 
 #include <algorithm>
 #include <cctype>
@@ -212,8 +213,13 @@ private:
 
         double parsed_value = 0.0;
         const std::string_view token = source_.substr(start, position_ - start);
-        const auto [ptr, error] = std::from_chars(token.data(), token.data() + token.size(), parsed_value);
-        if (error == std::errc() && ptr == token.data() + token.size()) {
+        
+        
+        char* end_ptr = nullptr;
+        parsed_value = std::strtod(token.data(), &end_ptr);
+        struct { const char* ptr; std::errc ec; } result {end_ptr,(end_ptr == token.data()) ? std::errc::invalid_argument : std::errc{}};        
+        
+        if (end_ptr == token.data() + token.size()) {
             return parsed_value;
         }
 
@@ -458,6 +464,17 @@ std::filesystem::path find_existing_app_data_directory(std::filesystem::path pat
 }
 
 std::filesystem::path default_app_data_directory() {
+#ifdef __ANDROID__
+    std::string android_error;
+    if (auto android_files_dir = platform::android::files_directory(android_error); android_files_dir) {
+        return *android_files_dir / "app_data";
+    }
+
+    if (const char* home = std::getenv("HOME"); home != nullptr && *home != '\0') {
+        return std::filesystem::path(home) / "app_data";
+    }
+#endif
+
     const auto current_app_data = std::filesystem::current_path() / "app_data";
     if (std::filesystem::exists(current_app_data)) {
         return current_app_data;

@@ -1,0 +1,104 @@
+plugins {
+    id "com.android.application"
+}
+
+def localProperties = new java.util.Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+
+def rustCompilerPath = localProperties.getProperty("rustc.path") ?: System.getenv("RUSTC") ?: "rustc"
+def rustCargoPath = localProperties.getProperty("cargo.path") ?: System.getenv("CARGO") ?: "cargo"
+
+android {
+    namespace "space.mors.lal"
+    compileSdk 35
+    ndkVersion "26.3.11579264"
+
+    def mvpVersionCode = 1
+
+    defaultConfig {
+        applicationId "space.mors.lal"
+        minSdk 28
+        targetSdk 35
+        versionCode mvpVersionCode
+        versionName "0.1.0"
+        resValue "string", "app_name", "Life After Life"
+
+        ndk { abiFilters "arm64-v8a" }
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared", 
+                          "-DRust_COMPILER=${rustCompilerPath}",
+                          "-DRust_CARGO=${rustCargoPath}",
+                          "-DRust_CARGO_TARGET=aarch64-linux-android", 
+                          "-DSLINT_STYLE=native",
+                          "-DSLINT_FEATURE_BACKEND_ANDROID_ACTIVITY_06=ON",
+                          "-DSLINT_FEATURE_BACKEND_WINIT=OFF",
+                          "-DSLINT_FEATURE_BACKEND_QT=OFF"
+                cppFlags "-std=c++20"
+                targets "cargo-build_lal_android_launcher"
+            }
+        }
+    }
+
+    buildTypes {
+        debug { debuggable true }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file("../../CMakeLists.txt")
+            version "3.22.1"
+        }
+    }
+
+    sourceSets {
+        main { jniLibs.srcDirs = ["src/main/jniLibs"] }
+    }
+
+    packaging {
+        jniLibs { useLegacyPackaging true }
+    }
+}
+
+tasks.register("copyNativeLauncher", Copy) {
+    dependsOn "externalNativeBuildDebug"
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    def outputDir = file("${projectDir}/src/main/jniLibs/arm64-v8a")
+
+    from(fileTree("${projectDir}/.cxx/Debug")) {
+        include "**/liblal_android_launcher.so"
+    }
+
+    into outputDir
+    eachFile { path = name }
+    includeEmptyDirs = false
+
+    doLast {
+        def found = false
+        if (outputDir.exists()) {
+            outputDir.eachFile { if (it.name.contains("liblal_android_launcher")) found = true }
+        }
+        if (found) {
+            println "SUCCESS: liblal_android_launcher.so copied to ${outputDir.absolutePath}"
+        } else {
+            println "WARNING: liblal_android_launcher.so NOT FOUND. APK might be empty."
+        }
+    }
+}
+
+afterEvaluate {
+    tasks.withType(com.android.build.gradle.tasks.MergeSourceSetFolders).configureEach {
+        if (name == "mergeDebugJniLibFolders") {
+            dependsOn "copyNativeLauncher"
+        }
+    }
+}

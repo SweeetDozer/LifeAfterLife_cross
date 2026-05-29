@@ -1,4 +1,9 @@
-out
+out/
+build/
+installer-output/
+app_data/
+structure_file.txt
+rustup-init.exe
 
 # Prerequisites
 *.d
@@ -37,7 +42,23 @@ out
 .cache
 
 # CMake build directory
-build
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+# Android build/local output
+android/.gradle/
+android/.gradle-cli/
+android/.gradle_home/
+android/.idea/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/app/src/main/jniLibs/
+android/local.properties
+android/build_log.txt
+android/so_locations.txt
 
 # IDE workspace caches
 .vs/

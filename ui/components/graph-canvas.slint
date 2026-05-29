@@ -379,8 +379,6 @@ export component GraphCanvas inherits Rectangle {
                 viewbox-height: parent.height / 1px;
                 stroke: #7b6858;
                 stroke-width: (root.selected_relationship_id == relationship_line.id ? 10px : 7px) * root.canvas_zoom;
-                stroke-line-cap: round;
-                stroke-line-join: round;
                 fill: transparent;
                 commands: relationship_line.commands;
             }
@@ -402,8 +400,6 @@ export component GraphCanvas inherits Rectangle {
                 viewbox-height: parent.height / 1px;
                 stroke: root.selected_relationship_id == relationship_line.id ? self.selected_stroke : self.base_stroke;
                 stroke-width: (root.selected_relationship_id == relationship_line.id ? 5px : 3px) * root.canvas_zoom;
-                stroke-line-cap: round;
-                stroke-line-join: round;
                 fill: transparent;
                 commands: relationship_line.commands;
             }

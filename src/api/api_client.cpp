@@ -1,10 +1,15 @@
 #include "api_client.h"
+#include "../platform/android_support.h"
 
 #include <charconv>
 #include <cctype>
 #include <iostream>
 #include <sstream>
 #include <string_view>
+
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -227,8 +232,14 @@ private:
 
         double parsed_value = 0.0;
         const std::string_view token = source_.substr(start, position_ - start);
-        const auto [ptr, error] = std::from_chars(token.data(), token.data() + token.size(), parsed_value);
-        if (error == std::errc() && ptr == token.data() + token.size()) {
+
+
+        char* end_ptr = nullptr;
+        parsed_value = std::strtod(token.data(), &end_ptr);
+        struct { const char* ptr; std::errc ec; } result {end_ptr, (end_ptr == token.data()) ? std::errc::invalid_argument : std::errc{}};
+        
+        
+        if (end_ptr == token.data() + token.size()) {
             return parsed_value;
         }
         return std::nullopt;
@@ -263,6 +274,7 @@ private:
     std::size_t position_ = 0;
 };
 
+#ifdef _WIN32
 std::wstring utf8_to_wide(std::string_view text)
 {
     if (text.empty()) {
@@ -328,6 +340,43 @@ std::wstring build_request_path(const std::wstring& base_path, const std::string
     request_path += utf8_to_wide(path);
     return request_path.empty() ? L"/" : request_path;
 }
+#endif
+
+std::string join_url(std::string_view base_url, std::string_view path)
+{
+    if (base_url.empty()) {
+        return std::string(path);
+    }
+
+    std::string full_url(base_url);
+    if (!full_url.empty() && full_url.back() == '/' && !path.empty() && path.front() == '/') {
+        full_url.pop_back();
+    }
+    full_url += path;
+    return full_url;
+}
+
+std::string narrow_method(std::wstring_view method)
+{
+    std::string narrowed;
+    narrowed.reserve(method.size());
+    for (wchar_t ch : method) {
+        narrowed.push_back(static_cast<char>(ch));
+    }
+    return narrowed;
+}
+
+#ifdef __ANDROID__
+void android_log_info(const char* format, const std::string& value)
+{
+    __android_log_print(ANDROID_LOG_INFO, "LAL.ApiClient", format, value.c_str());
+}
+
+void android_log_info(const char* format, int value, const std::string& text)
+{
+    __android_log_print(ANDROID_LOG_INFO, "LAL.ApiClient", format, value, text.c_str());
+}
+#endif
 
 ApiError make_network_error(const std::string& message)
 {
@@ -470,9 +519,57 @@ ApiResult<HttpResponse> ApiClient::delete_json(const std::string& path) const
 
 ApiResult<HttpResponse> ApiClient::request_json(const std::wstring& method, const std::string& path, std::string_view json_body) const
 {
-#ifndef _WIN32
-    return ApiResult<HttpResponse>::failure(make_network_error("WinHTTP API client is only implemented for Windows."));
-#else
+#ifdef __ANDROID__
+    platform::android::HttpRequest request {
+        .method = narrow_method(method),
+        .url = join_url(base_url_, path),
+        .headers = {
+            { "Accept", "application/json" },
+            { "Content-Type", "application/json" },
+        },
+        .body = std::string(json_body),
+    };
+    if (!access_token_.empty()) {
+        request.headers.push_back({ "Authorization", "Bearer " + access_token_ });
+    }
+
+#ifdef __ANDROID__
+    android_log_info("HTTP request: %s", request.url);
+#endif
+
+    std::string error_message;
+    auto android_response = platform::android::http_request(request, error_message);
+    if (!android_response) {
+#ifdef __ANDROID__
+        android_log_info("HTTP network error: %s", error_message);
+#endif
+        return ApiResult<HttpResponse>::failure(make_network_error(
+            error_message.empty() ? "Android HTTP request failed." : error_message));
+    }
+
+    HttpResponse response;
+    response.status_code = android_response->status_code;
+    response.body = std::move(android_response->body);
+
+#ifdef __ANDROID__
+    android_log_info("HTTP response %d: %s", response.status_code, response.body);
+#endif
+
+    if (!response.body.empty()) {
+        response.json_body = parse_json(response.body);
+        if (!response.json_body) {
+            return ApiResult<HttpResponse>::failure(
+                make_parse_error(response.status_code, "Failed to parse JSON response body."));
+        }
+    }
+
+    if (response.status_code < 200 || response.status_code >= 300) {
+        return ApiResult<HttpResponse>::failure(
+            make_http_error(response.status_code, response.body.empty() ? "HTTP request failed." : response.body));
+    }
+
+    return ApiResult<HttpResponse>::success(std::move(response));
+#elif defined(_WIN32)
     const auto url_parts = crack_base_url(base_url_);
     if (!url_parts) {
         return ApiResult<HttpResponse>::failure(make_network_error("Failed to parse API base URL."));
@@ -580,6 +677,9 @@ ApiResult<HttpResponse> ApiClient::request_json(const std::wstring& method, cons
     }
 
     return ApiResult<HttpResponse>::success(std::move(response));
+#else
+    return ApiResult<HttpResponse>::failure(
+        make_network_error("HTTP API client is only implemented for Windows and Android."));
 #endif
 }
 

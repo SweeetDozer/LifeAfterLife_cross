@@ -1,0 +1,10 @@
+[package]
+name = "lal_android_launcher"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+slint-cpp = { path = "@SLINT_SOURCE_DIR@/api/cpp", default-features = false, features = ["backend-android-activity-06", "renderer-software", "std"] }
