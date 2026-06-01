@@ -75,13 +75,14 @@ export component MainLayout inherits Rectangle {
     callback logout_requested();
 
     private property <bool> trees_collapsed: true;
+    private property <bool> compact_layout: root.width < 720px;
     private property <length> trees_expanded_width: 220px;
     private property <length> trees_collapsed_width: 26px;
     private property <bool> sidebar_settings_open: false;
     private property <bool> details_open: false;
-    private property <length> details_drawer_width: 320px;
+    private property <length> details_drawer_width: root.compact_layout ? root.width - root.details_handle_width - 24px : 320px;
     private property <length> details_handle_width: 26px;
-    private property <length> details_handle_height: 120px;
+    private property <length> details_handle_height: root.compact_layout ? 92px : 120px;
 
     background: #f4ede4;
 
@@ -112,10 +113,10 @@ export component MainLayout inherits Rectangle {
     }
 
     if (root.relationship_error_message != "") : Rectangle {
-        width: 320px;
+        width: root.compact_layout ? root.width - 24px : 320px;
         height: 56px;
-        x: parent.width - 340px;
-        y: 20px;
+        x: root.compact_layout ? 12px : parent.width - 340px;
+        y: root.compact_layout ? 12px : 20px;
         background: #352b2c;
         border-color: #7f5f63;
         border-width: 1px;
@@ -138,8 +139,8 @@ export component MainLayout inherits Rectangle {
         spacing: 12px;
 
         HorizontalLayout {
-            padding: 20px;
-            spacing: 18px;
+            padding: root.compact_layout ? 8px : 20px;
+            spacing: root.compact_layout ? 8px : 18px;
 
         TreesRail {
             min-width: root.trees_collapsed ? root.trees_collapsed_width : root.trees_expanded_width;
@@ -249,10 +250,12 @@ export component MainLayout inherits Rectangle {
 }
 
     Rectangle {
-        x: root.width - (root.details_open ? root.details_drawer_width : root.details_handle_width) - 20px;
-        y: 20px;
+        x: root.details_open && root.compact_layout
+            ? 12px
+            : root.width - (root.details_open ? root.details_drawer_width : root.details_handle_width) - (root.compact_layout ? 8px : 20px);
+        y: root.compact_layout ? 12px : 20px;
         width: root.details_open ? root.details_drawer_width : root.details_handle_width;
-        height: root.height - 40px;
+        height: root.height - (root.compact_layout ? 24px : 40px);
         background: transparent;
 
         TouchArea {

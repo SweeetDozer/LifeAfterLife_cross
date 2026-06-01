@@ -1,88 +1,92 @@
 # Life After Life
 
-Life After Life is a cross-platform MVP client for building and editing family and relationship trees. The app is written in C++20 with a Slint UI and talks to the LAL backend API at `https://api.lal.mors.space`.
+Life After Life - кроссплатформенный MVP-клиент для создания и редактирования семейных деревьев и связей между людьми. Приложение написано на C++20 с интерфейсом на Slint и работает с backend API LAL по адресу `https://api.lal.mors.space`.
 
-## MVP Scope
+## Возможности MVP
 
-This release is intended as a usable first public build, not a final product. It supports:
+Этот релиз задуман как первый пригодный для использования публичный билд, а не финальная версия продукта. Сейчас поддерживается:
 
-- Account registration, login, logout, and persisted sessions.
-- Tree list loading, tree creation, renaming, deletion, and last-opened tree restore.
-- Person creation, editing, deletion, and draggable placement on the graph canvas.
-- Relationship creation and deletion for parent, spouse, sibling, and friend links.
-- Canvas pan/zoom, auto-layout, and local layout persistence per tree.
-- English/Russian UI strings.
-- Windows desktop build and an experimental Android APK wrapper.
+- Регистрация, вход, выход из аккаунта и сохранение сессии.
+- Загрузка списка деревьев, создание, переименование, удаление деревьев и восстановление последнего открытого дерева.
+- Создание, редактирование, удаление людей и перетаскивание карточек на графе.
+- Создание и удаление связей типов: родитель, супруг, сиблинг и друг.
+- Панорамирование и масштабирование холста, авто-раскладка и локальное сохранение раскладки для каждого дерева.
+- Интерфейс на английском и русском языках.
+- Desktop-сборка для Windows и экспериментальный Android APK.
 
-## Current Limits
+## Текущие ограничения
 
-- The HTTP client is implemented for Windows and Android only.
-- Android support is MVP/experimental and currently targets `arm64-v8a`.
-- Relationship editing is limited to create/delete; changing a relationship type is not implemented yet.
-- Photos/media, sharing/access management, offline backend sync, and production signing are outside this MVP.
+- HTTP-клиент реализован только для Windows и Android.
+- Android-поддержка пока экспериментальная и рассчитана на `arm64-v8a`.
+- Редактирование связей ограничено созданием и удалением; изменение типа существующей связи пока не реализовано.
+- Фото/медиа, управление доступом, offline-синхронизация backend и production-подпись не входят в этот MVP.
 
-## Requirements
+## Требования
 
-- CMake 3.21 or newer.
-- A C++20 compiler.
-- Rust toolchain in `PATH` because Slint may be fetched and built from source.
-- Network access on first configure if Slint/Corrosion are not already available.
+- CMake 3.21 или новее.
+- C++20-совместимый компилятор.
+- Rust toolchain в `PATH`, потому что Slint может скачиваться и собираться из исходников.
+- Доступ в интернет при первой конфигурации, если Slint/Corrosion ещё не доступны локально.
 
-Windows builds also link against WinHTTP. Android builds need Android Studio, SDK/NDK, Java 17+, and the Rust Android target. See [ANDROID_BUILD.md](ANDROID_BUILD.md).
+Windows-сборка также использует WinHTTP. Для Android нужны Android Studio, SDK/NDK, Java 17+ и Rust Android target. Подробности см. в [ANDROID_BUILD.md](ANDROID_BUILD.md).
 
-## Build On Windows
+## Сборка под Windows
 
-Configure:
+Конфигурация:
 
 ```powershell
 cmake -S . -B out -DCMAKE_BUILD_TYPE=Debug
 ```
 
-Build:
+Сборка:
 
 ```powershell
 cmake --build out --config Debug
 ```
 
-Run:
+Запуск:
 
 ```powershell
 .\out\Debug\LifeAfterLife.exe
 ```
 
-For a quick local run, `z_run.bat` builds the Debug target and starts the app.
+Для быстрого локального запуска можно использовать `z_run.bat`: он собирает Debug-цель и запускает приложение.
 
-## Windows Installer
+## Установщик Windows
 
-The repository includes an Inno Setup script:
+В репозитории есть скрипт Inno Setup:
 
 ```powershell
 iscc setup.iss
 ```
 
-The installer is written to `installer-output\LifeAfterLife-0.1.0-Setup.exe`.
+Готовый установщик будет сохранён сюда:
+
+```text
+installer-output\LifeAfterLife-0.1.0-Setup.exe
+```
 
 ## Android APK
 
-Open the `android/` directory in Android Studio and build the `app` target, or use the Gradle wrapper after Android Studio has installed the required SDK/NDK components:
+Откройте папку `android/` в Android Studio и соберите target `app`, либо используйте Gradle wrapper после установки нужных компонентов SDK/NDK через Android Studio:
 
 ```powershell
 cd android
 .\gradlew.bat assembleDebug
 ```
 
-The debug APK is expected at:
+Ожидаемый путь к debug APK:
 
 ```text
 android\app\build\outputs\apk\debug\app-debug.apk
 ```
 
-## Local Data
+## Локальные данные
 
-Desktop local data is stored under `app_data/` in this repository during development. It contains session tokens, UI state, and per-tree layout files, so it should not be shipped or committed with real user credentials.
+Во время desktop-разработки локальные данные хранятся в папке `app_data/` внутри репозитория. Там находятся токены сессии, состояние UI и файлы раскладки деревьев, поэтому эти данные нельзя отправлять пользователям или коммитить с реальными учётными данными.
 
-Before publishing a release, check [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+Перед публикацией релиза проверьте [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
-## License
+## Лицензия
 
-MIT. See [LICENSE](LICENSE).
+MIT. См. [LICENSE](LICENSE).

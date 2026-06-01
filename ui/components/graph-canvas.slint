@@ -52,8 +52,9 @@ export component GraphCanvas inherits Rectangle {
     private property <float> pan_start_offset_x: 0;
     private property <float> pan_start_offset_y: 0;
     private property <float> click_drag_threshold: 6.0;
-    private property <length> canvas_header_height: 56px;
-    private property <length> canvas_inner_padding: 12px;
+    private property <bool> compact_layout: root.width < 720px;
+    private property <length> canvas_header_height: root.compact_layout ? 98px : 56px;
+    private property <length> canvas_inner_padding: root.compact_layout ? 8px : 12px;
     private property <string> relationship_creation_helper_text:
         root.relationship_creation_step == 1 ? Strings.relationship_helper_first
         : root.relationship_creation_step == 2 ? Strings.relationship_helper_second
@@ -103,12 +104,12 @@ export component GraphCanvas inherits Rectangle {
 
         Rectangle {
             x: root.canvas_inner_padding;
-            y: 12px;
+            y: root.compact_layout ? 8px : 12px;
             width: parent.width - root.canvas_inner_padding * 2;
-            height: 36px;
+            height: root.compact_layout ? 82px : 36px;
             background: transparent;
 
-            HorizontalLayout {
+            if (!root.compact_layout) : HorizontalLayout {
                 width: parent.width;
                 height: parent.height;
                 spacing: 10px;
@@ -231,13 +232,152 @@ export component GraphCanvas inherits Rectangle {
                     }
                 }
             }
+
+            if (root.compact_layout) : VerticalLayout {
+                width: parent.width;
+                height: parent.height;
+                spacing: 8px;
+
+                Text {
+                    height: 30px;
+                    text: root.relationship_creation_active ? root.relationship_creation_helper_text : Strings.tree_prefix + root.selected_tree_name;
+                    font-size: 18px;
+                    color: #6b5645;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+
+                HorizontalLayout {
+                    height: 36px;
+                    spacing: 6px;
+
+                    if (root.is_edit_mode) : TouchArea {
+                        width: 54px;
+                        height: 36px;
+
+                        clicked => {
+                            root.auto_layout_requested();
+                        }
+
+                        Rectangle {
+                            width: parent.width;
+                            height: parent.height;
+                            background: parent.has-hover ? #efe2d4 : #f7efe6;
+                            border-radius: 10px;
+                            border-width: 1px;
+                            border-color: parent.has-hover ? #ccb59c : #decfbd;
+
+                            Text {
+                                text: "Auto";
+                                color: #6b5645;
+                                font-size: 11px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                    }
+
+                    TouchArea {
+                        width: 52px;
+                        height: 36px;
+                        enabled: root.is_edit_mode && !root.relationship_creation_active;
+
+                        clicked => {
+                            if (root.is_edit_mode && !root.relationship_creation_active) {
+                                root.add_person_requested();
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width;
+                            height: parent.height;
+                            background: root.is_edit_mode && !root.relationship_creation_active ? (parent.has-hover ? #efe2d4 : #f7efe6) : #f1e6da;
+                            border-radius: 10px;
+                            border-width: 1px;
+                            border-color: root.is_edit_mode && !root.relationship_creation_active ? (parent.has-hover ? #ccb59c : #decfbd) : #e3d6c8;
+
+                            Text {
+                                text: "+P";
+                                color: root.is_edit_mode && !root.relationship_creation_active ? #6b5645 : #aa9685;
+                                font-size: 12px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                    }
+
+                    TouchArea {
+                        width: 52px;
+                        height: 36px;
+                        enabled: root.is_edit_mode && !root.relationship_creation_active;
+
+                        clicked => {
+                            if (root.is_edit_mode && !root.relationship_creation_active) {
+                                root.relationship_creation_started();
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width;
+                            height: parent.height;
+                            background: root.is_edit_mode && !root.relationship_creation_active ? (parent.has-hover ? #efe2d4 : #f7efe6) : #f1e6da;
+                            border-radius: 10px;
+                            border-width: 1px;
+                            border-color: root.is_edit_mode && !root.relationship_creation_active ? (parent.has-hover ? #ccb59c : #decfbd) : #e3d6c8;
+
+                            Text {
+                                text: "+R";
+                                color: root.is_edit_mode && !root.relationship_creation_active ? #6b5645 : #aa9685;
+                                font-size: 12px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        background: transparent;
+                    }
+
+                    TouchArea {
+                        width: 58px;
+                        height: 36px;
+
+                        clicked => {
+                            root.toggle_edit_mode();
+                        }
+
+                        Rectangle {
+                            width: parent.width;
+                            height: parent.height;
+                            background: root.is_edit_mode ? (parent.has-hover ? #e2ccb4 : #ead8c5) : (parent.has-hover ? #efe2d4 : #f7efe6);
+                            border-radius: 10px;
+                            border-width: 1px;
+                            border-color: root.is_edit_mode ? (parent.has-hover ? #b98858 : #c79f77) : (parent.has-hover ? #ccb59c : #decfbd);
+
+                            Text {
+                                text: root.is_edit_mode ? "Edit" : "View";
+                                color: root.is_edit_mode ? #4f3b2e : #6b5645;
+                                font-size: 11px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         if (root.relationship_creation_active) : Rectangle {
             x: root.canvas_inner_padding;
-            y: 66px;
+            y: root.compact_layout ? 98px : 66px;
             width: parent.width - root.canvas_inner_padding * 2;
-            height: root.relationship_type_selection_visible ? 112px : 72px;
+            height: root.relationship_type_selection_visible ? (root.compact_layout ? 136px : 112px) : 72px;
             background: #f8f1e8;
             border-radius: 14px;
             border-color: #e2d4c3;
@@ -279,7 +419,7 @@ export component GraphCanvas inherits Rectangle {
                 }
             }
 
-            if (root.relationship_type_selection_visible) : HorizontalLayout {
+            if (root.relationship_type_selection_visible && !root.compact_layout) : HorizontalLayout {
                 x: 14px;
                 y: 46px;
                 width: parent.width - 28px;
@@ -312,13 +452,60 @@ export component GraphCanvas inherits Rectangle {
                     }
                 }
             }
+
+            if (root.relationship_type_selection_visible && root.compact_layout) : VerticalLayout {
+                x: 14px;
+                y: 46px;
+                width: parent.width - 28px;
+                spacing: 8px;
+
+                HorizontalLayout {
+                    height: 28px;
+                    spacing: 8px;
+
+                    for relationship_type[index] in Strings.relationship_type_values : TouchArea {
+                        height: 28px;
+                        enabled: root.is_edit_mode;
+
+                        clicked => {
+                            if (root.is_edit_mode) {
+                                root.relationship_type_selected(relationship_type);
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width;
+                            height: parent.height;
+                            background: root.is_edit_mode ? (parent.has-hover ? #f7eee3 : #fffaf5) : #f1e6da;
+                            border-radius: 10px;
+                            border-width: 1px;
+                            border-color: root.is_edit_mode ? (parent.has-hover ? #ccb59c : #decfbd) : #e3d6c8;
+
+                            Text {
+                                text: Strings.relationship_type_labels[index];
+                                color: root.is_edit_mode ? #6b5645 : #aa9685;
+                                font-size: 12px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Rectangle {
             x: root.canvas_inner_padding;
-            y: root.relationship_creation_active ? 190px : root.canvas_header_height;
+            y: root.relationship_creation_active
+                ? (root.compact_layout ? (root.relationship_type_selection_visible ? 242px : 178px) : 190px)
+                : root.canvas_header_height;
             width: parent.width - root.canvas_inner_padding * 2;
-            height: parent.height - (root.relationship_creation_active ? 190px : root.canvas_header_height) - root.canvas_inner_padding;
+            height: parent.height
+                - (root.relationship_creation_active
+                    ? (root.compact_layout ? (root.relationship_type_selection_visible ? 242px : 178px) : 190px)
+                    : root.canvas_header_height)
+                - root.canvas_inner_padding;
             background: transparent;
             clip: true;
 

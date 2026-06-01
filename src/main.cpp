@@ -920,30 +920,41 @@ int lal_run_application()
     const std::vector<Person> empty_persons;
     bool relationship_load_notice_logged = false;
 
+    const auto save_tree_layout_for_tree = [&](int tree_id) {
+        if (tree_id < 0) {
+            return;
+        }
+
+        const auto persons_it = persons_by_tree.find(tree_id);
+        if (persons_it == persons_by_tree.end()) {
+            return;
+        }
+
+        static const std::vector<Relationship> empty_relationships;
+        const auto rels_it = relationships_by_tree.find(tree_id);
+        const auto &relationships_for_save = rels_it != relationships_by_tree.end()
+            ? rels_it->second
+            : empty_relationships;
+        storage::save_tree_layout(
+            tree_id,
+            make_full_tree_layout(app_state, persons_it->second, relationships_for_save));
+    };
+
     const std::function<void()> schedule_tree_layout_save = [&, app_weak = slint::ComponentWeakHandle<AppWindow>(app)]() {
         if (app_state.selected_tree_id < 0) {
             return;
         }
 
+        const int tree_id_to_save = app_state.selected_tree_id;
         layout_save_timer.start(
             slint::TimerMode::SingleShot,
             std::chrono::milliseconds(450),
-            [&, app_weak]() {
+            [&, app_weak, tree_id_to_save]() {
                 if (!app_weak.lock()) {
                     return;
                 }
 
-                const auto persons_it = persons_by_tree.find(app_state.selected_tree_id);
-                if (persons_it == persons_by_tree.end()) {
-                    return;
-                }
-
-                // include relationships when saving layout
-                const auto rels_it = relationships_by_tree.find(app_state.selected_tree_id);
-                const auto &rels_for_save = rels_it != relationships_by_tree.end() ? rels_it->second : std::vector<Relationship>{};
-                storage::save_tree_layout(
-                    app_state.selected_tree_id,
-                    make_full_tree_layout(app_state, persons_it->second, rels_for_save));
+                save_tree_layout_for_tree(tree_id_to_save);
             });
     };
 
@@ -1029,6 +1040,9 @@ int lal_run_application()
         if (!tree_exists(trees, tree_id)) {
             return false;
         }
+
+        save_tree_layout_for_tree(app_state.selected_tree_id);
+        layout_save_timer.stop();
 
         if (!load_tree_cache_from_backend(tree_id)) {
             return false;
@@ -1595,7 +1609,7 @@ int lal_run_application()
         sync_relationship_creation_ui(*app, relationship_creation_step);
     });
 
-    app->on_relationship_type_selected([app, &tree_api, &persons_by_tree, &relationships_by_tree, &app_state, &relationship_line_cache, &relationship_lines_model, &relationship_error_timer, &relationship_creation_step, &relationship_first_person_id, &relationship_second_person_id, &next_temporary_relationship_id, &schedule_tree_layout_save](slint::SharedString relationship_type_value) {
+    app->on_relationship_type_selected([app, &tree_api, &persons_by_tree, &relationships_by_tree, &app_state, &relationship_line_cache, &relationship_lines_model, &relationship_error_timer, &relationship_creation_step, &relationship_first_person_id, &relationship_second_person_id, &next_temporary_relationship_id, &save_tree_layout_for_tree, &schedule_tree_layout_save](slint::SharedString relationship_type_value) {
         if (!app_state.is_edit_mode) {
             std::cout << "relationship creation ignored (view mode)\n";
             return;
@@ -1689,6 +1703,7 @@ int lal_run_application()
             app_state.canvas_zoom);
         relationship_lines_model = make_relationship_line_model(relationship_line_cache);
         app->set_relationship_lines(relationship_lines_model);
+        save_tree_layout_for_tree(app_state.selected_tree_id);
         schedule_tree_layout_save();
     });
 
@@ -1814,7 +1829,7 @@ int lal_run_application()
         app->set_inspector_edit_mode(app_state.inspector_edit_mode);
     });
 
-    app->on_delete_person_requested([app, &tree_api, &persons_by_tree, &relationships_by_tree, &app_state, &persons_model, &relationship_line_cache, &relationship_lines_model, &schedule_tree_layout_save]() {
+    app->on_delete_person_requested([app, &tree_api, &persons_by_tree, &relationships_by_tree, &app_state, &persons_model, &relationship_line_cache, &relationship_lines_model, &save_tree_layout_for_tree, &schedule_tree_layout_save]() {
         if (!app_state.is_edit_mode) {
             std::cout << "delete person ignored (view mode)\n";
             return;
@@ -1891,10 +1906,11 @@ int lal_run_application()
             return;
         }
 
+        save_tree_layout_for_tree(app_state.selected_tree_id);
         schedule_tree_layout_save();
     });
 
-    app->on_delete_relationship_requested([app, &tree_api, &persons_by_tree, &relationships_by_tree, &app_state, &relationship_line_cache, &relationship_lines_model, &schedule_tree_layout_save]() {
+    app->on_delete_relationship_requested([app, &tree_api, &persons_by_tree, &relationships_by_tree, &app_state, &relationship_line_cache, &relationship_lines_model, &save_tree_layout_for_tree, &schedule_tree_layout_save]() {
         if (!app_state.is_edit_mode) {
             std::cout << "delete relationship ignored (view mode)\n";
             return;
@@ -1946,6 +1962,7 @@ int lal_run_application()
             return;
         }
 
+        save_tree_layout_for_tree(app_state.selected_tree_id);
         schedule_tree_layout_save();
     });
 
